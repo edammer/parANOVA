@@ -145,11 +145,11 @@ plotVolc<- function(ANOVAout=ANOVAout,
                     flip=c(),                    # p value column numbers in which to swap denominator of pair for x axis range (gene products high in denominator, will be on left)
                     signifP=0.05,                # p value threshold for counting Differential Expression points
                     useNETcolors=TRUE,           # use module colors saved to ANOVAout, if available; otherwise specify downColor upColor, and NCcolor
-                    downColor="royalblue"        # significant points above/beyond thresholds on the upper left are this color if useNETcolors=FALSE
-                    upColor="red"                # significant points above/beyond thresholds on the upper right are this color if useNETcolors=FALSE
-                    NCcolor="grey"               # points not significant are this color if useNETcolors=FALSE
+                    downColor="royalblue",       # significant points above/beyond thresholds on the upper left are this color if useNETcolors=FALSE
+                    upColor="red",               # significant points above/beyond thresholds on the upper right are this color if useNETcolors=FALSE
+                    NCcolor="grey",              # points not significant are this color if useNETcolors=FALSE
                     splitColors=FALSE,           # create a separate volcano plot(s) for each color in an outputfigs/splitVolcanoes subfolder (folder created if it does not exist)
-                    highlightGeneProducts=c()    # c("APP|P05067","MAPT|P10636","APOE|P02649") ; a list of uniqueID rownames to highlight as larger gold points. If symbolsOnly=TRUE, this can be a list of symbols, like c("APP","SMOC1","MAPT")
+                    highlightGeneProducts=c(),   # c("APP|P05067","MAPT|P10636","APOE|P02649") ; a list of uniqueID rownames to highlight as larger gold points. If symbolsOnly=TRUE, this can be a list of symbols, like c("APP","SMOC1","MAPT")
                     symbolsOnly=FALSE,           # for mouse-over HTML plots and the above highlight callouts, consider only displaying and using official gene symbol from first part of UniqueID rownames of ANOVAout.
                     HTMLout=TRUE,                # output interactive HTML copies that can be opened in browser. Requires plotly package.
                     outFilePrefix="4",           # typically "4", or step # in pipeline being run
