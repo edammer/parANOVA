@@ -61,7 +61,7 @@ parANOVA.dex <- function(cleanDat.=cleanDat,                             # clean
   ## Fast code with parApply
   dataclipped <- data[, 3:ncol(data)] # as.matrix(as.numeric(data[,3:ncol(data)]))
   SampleType <- as.character(data$SampleType)
-  parallel::clusterExport(cl=clusterLocal, list("SampleType","tukresult1","fallbackIfZeroTukeyP"), envir=.GlobalEnv)
+  parallel::clusterExport(cl=clusterLocal, list("SampleType","tukresult1","fallbackIfZeroTukeyP"), envir=environment())  # below helperfn not running in .GlobalEnv
   parts <- splitIndices(ncol(dataclipped), length(clusterLocal))
   dataclippedParts <- lapply(parts, function(i) dataclipped[,i,drop=FALSE])
 #  resParts <- parallel::parApply(cl=clusterLocal, dataclippedParts, 2, function(x) {
