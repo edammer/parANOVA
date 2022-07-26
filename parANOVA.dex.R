@@ -183,7 +183,7 @@ BIGspots <- highlightGeneProducts
 
 cutoff=log2(1+FCmin)
 # shows what your cutoff for log2(FC) calculates as
-print(paste0("...Applying a ", *100,"% minimum fold change threshold at + and - x=", signif(cutoff,2)," ..."))
+print(paste0("...Applying a ", FCmin*100,"% minimum fold change threshold at + and - x=", signif(cutoff,2)," ..."))
 
 
 n <- nrow(ANOVAout)
