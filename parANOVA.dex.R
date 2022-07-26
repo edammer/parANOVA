@@ -439,5 +439,5 @@ assign("numComp",numComp, envir=.GlobalEnv)
 assign("comparisonIDs",comparisonIDs, envir=.GlobalEnv)
 assign("testIndexMasterList",testIndexMasterList, envir=.GlobalEnv)
 assign("flip",flip, envir=.GlobalEnv)
-assign("",FCmin, envir=.GlobalEnv)
+assign("FCmin",FCmin, envir=.GlobalEnv)
 }
