@@ -440,5 +440,5 @@ assign("comparisonIDs",comparisonIDs, envir=.GlobalEnv)
 assign("testIndexMasterList",testIndexMasterList, envir=.GlobalEnv)
 assign("flip",flip, envir=.GlobalEnv)
 assign("FCmin",FCmin, envir=.GlobalEnv)
-assign("SigVolcCutoff",sigCutoff, envir=.GlobalEnv)
+assign("sigVolcCutoff",sigCutoff, envir=.GlobalEnv)
 }
