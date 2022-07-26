@@ -14,9 +14,11 @@
 parANOVA.dex <- function(cleanDat.=cleanDat,                             # cleanDat, data table of 'cleaned' relative abundance with rows (genes or proteins) and columns (samples)
                          Grouping=numericMeta$Group,                     # Named groups (N>=2) for comparison of difference of means, in sample (column) order of cleanDat
                          parallelThreads=30,                             # number of CPU threads to speed calculation (recommended, 2 or more):
-                         NETcolors=net$colors,                           #list net with slot/vector containing module color assignments; length of vector must be equal to number of rows in cleanDat.
+#                         NETcolors=net$colors,                          # set outside this function; a vector containing module color assignments;
+                                                                         # length of vector must be equal to number of rows in cleanDat.
+                                                                         # Colors are only added to table output if available; function tries to use NETcolors variable , with fallback to net$colors
                          twoGroupCorrMethod="BH",                        # default method for full FDR correction when only 2 groups present is Benjamini-Hochberg
-                         outputCSV=TRUE,                                 #Output Full Table of statistics?  TRUE/FALSE
+                         outputCSV=TRUE,                                 # Output Full Table of statistics?  TRUE/FALSE
                          outFilePrefix="4",                              # typically "4", or step # in pipeline being run
                          outFileSuffix=FileBaseName,                     # A description of the project, used as a filename suffix
                          fallbackIfZeroTukeyP=TRUE, env=.GlobalEnv) {
@@ -83,8 +85,9 @@ parANOVA.dex <- function(cleanDat.=cleanDat,                             # clean
 
   numComp=(ncol(ANOVAoutList[[caseSubset]])-2)/2
 
-  ## Add network module colors
-  if(exists("NETcolors")) if (length(NETcolors)==nrow(ANOVAoutList[[caseSubset]])) { ANOVAoutList[[caseSubset]]$NETcolors <- NETcolors } else { warning("Network color assignment vector not of length in rows of cleanDat supplied -- not included in output table.") }
+  ## Add network module colors, if they can be found.
+  if(!exists("NETcolors")) if(exists("net")) { if ("colors" %in% names(net)) { NETcolors=net$colors } else { NETcolors=c() } } else { NETcolors=c() }
+  if (length(NETcolors)==nrow(ANOVAoutList[[caseSubset]])) { ANOVAoutList[[caseSubset]]$NETcolors <- NETcolors } else { warning("Network color assignment vector not of length in rows of cleanDat supplied -- not included in output table.") }
 
   #*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+
   if(outputCSV)  write.csv(ANOVAoutList[[caseSubset]],file=paste0(outFilePrefix,"ANOVA_diffEx-",caseSubset,outFileSuffix,".csv"))
@@ -169,7 +172,7 @@ numberOfNonComparisonColumns=length(colnames(ANOVAout)) - length(which(grepl("di
 numComp <- (length(colnames(ANOVAout)) - numberOfNonComparisonColumns) / 2 # of columns separating comparisons from matched column of log2(diffs), i.e. # of comparisons
 
 # What columns (column numbers) of ANOVAout (T-test or Tukey p values) do we plot volcanoes for? 
-testIndexMasterList <- if (selectComps=="ALL" | selectComps=="all" | selectComps=="All") { c(3:(numComp+2)) } else { if(is.integer(as.numeric(selectComps))) { as.integer(selectComps) } else { error("selectComps must be set to 'all' or valid integer column indexes of ANOVAout.") }}
+testIndexMasterList <- if (selectComps[1]=="ALL" | selectComps[1]=="all" | selectComps[1]=="All") { c(3:(numComp+2)) } else { if(max(as.numeric(selectComps))<numComp+3) { as.integer(selectComps) } else { stop("selectComps must be set to 'all' or valid integer column indexes of ANOVAout.") }}
 # log2(1) means NO change minimum to be counted in the volcano bookends; log2(1.25) for 25% FC min.
 cutoff <- log2(1+FCmin)
 # p value cutoff for Volcano significant hit counting; dashed line at -log10(sigCutoff)
@@ -180,7 +183,7 @@ BIGspots <- highlightGeneProducts
 
 cutoff=log2(1+FCmin)
 # shows what your cutoff for log2(FC) calculates as
-print(paste0("...Applying a ", FCmin*100,"% minimum fold change threshold at + and - x=", signif(cutoff,2)," ..."))
+print(paste0("...Applying a ", *100,"% minimum fold change threshold at + and - x=", signif(cutoff,2)," ..."))
 
 
 n <- nrow(ANOVAout)
@@ -430,4 +433,11 @@ for (testIndex in testIndexMasterList) {
 
 } #end if (HTMLout)
 
+
+## These variables may be referenced by dependent, downstream pipeline functions like GOparallel, or stackedDEXbar, following creation of ANOVAout data frame and volcanoes, propagating selections.
+assign("numComp",numComp, envir=.GlobalEnv)
+assign("comparisonIDs",comparisonIDs, envir=.GlobalEnv)
+assign("testIndexMasterList",testIndexMasterList, envir=.GlobalEnv)
+assign("flip",flip, envir=.GlobalEnv)
+assign("",FCmin, envir=.GlobalEnv)
 }
