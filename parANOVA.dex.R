@@ -41,13 +41,14 @@ parANOVA.dex <- function(dummyVar="",
   if (!exists("cleanDat")) stop("cleanDat variable must exist, holding gene product (rows) X sample (columns) data in the form of log2(relative abundance).")
   if (!exists("Grouping")) { if ("Group" %in% colnames(numericMeta)) { Grouping=numericMeta[,"Group"] } else { stop("Grouping vector not found. Must specify a group for every sample column in cleanDat.\n") }}
 
+  if (length(which(grepl("\\-",Grouping)))>0) { cat("- Grouping values have '-'; replacing with '.'...\n"); Grouping<-gsub("\\-",".",Grouping); }
   if (!exists("parallelThreads")) { cat("- parallelThreads variable not set. Running with 2 threads only.\n"); parallelThreads=2; }
   if (!exists("NETcolors")) if(exists("net")) { if ("colors" %in% names(net)) { NETcolors=net$colors } else { NETcolors=c() } } else { NETcolors=c() }
   if (!length(NETcolors)==nrow(cleanDat)) { cat("- Network color assignment vector not supplied or not of length in rows of cleanDat; will not be included in output table and data frame.\n") }
   if (!exists("twoGroupCorrMethod")) { cat("- twoGroupCorrMethod variable not set to a correction method for p.adjust when only 2 groups of samples specified in Grouping. Using Benjamini Hochberg 'BH' FDR.\n"); twoGroupCorrMethod="BH"; }
   if (!exists("outputCSV")) outputCSV=TRUE
-  if (!exists("outFilePrefix")) { outFilePrefix="" } else { outFilePrefix=paste0(outFilePrefix,".") }
-  if (!exists("outFileSuffix")) { if (exists("FileBaseName")) { outFileSuffix=paste0("-",FileBaseName) } else { outFileSuffix="-unspecified_study" }}
+  if (!exists("outFilePrefix")) { outFilePrefix="" } else { if (nchar(outFilePrefix)>0) outFilePrefix=paste0(outFilePrefix,".") }
+  if (!exists("outFileSuffix")) { if (exists("FileBaseName")) { outFileSuffix=paste0("-",FileBaseName) } else { outFileSuffix="-unspecified_study" }} else { if (nchar(outFileSuffix)>0) outFileSuffix=paste0("-",outFileSuffix) }
   if (!exists("fallbackIfSmallTukeyP")) { cat("- fallbackIfSmallTukeyP variable not set. Using recommended Bonferroni t-test FDR for unreliable Tukey p values <1e-10.\n"); fallbackIfSmallTukeyP=TRUE; }
   if (!is.logical(fallbackIfSmallTukeyP)) { cat("- fallbackIfSmallTukeyP variable not TRUE/FALSE. Using recommended Bonferroni t-test FDR for unreliable Tukey p values <1e-10.\n"); fallbackIfSmallTukeyP=TRUE; }
 
@@ -57,9 +58,6 @@ parANOVA.dex <- function(dummyVar="",
   if(exists("clusterLocal")) stopCluster(clusterLocal) #in case already started.
   clusterLocal <- makeCluster(c(rep("localhost",parallelThreads)),type="SOCK")
   registerDoParallel(clusterLocal)
-
-  if (nchar(outFilePrefix)>0) outFilePrefix=paste0(outFilePrefix,".")
-  if (nchar(outFileSuffix)>0) outFileSuffix=paste0("-",outFileSuffix)
 
   ANOVAoutList<-list()
   caseSubset="ALL"
@@ -94,7 +92,7 @@ parANOVA.dex <- function(dummyVar="",
   ANOVAoutList[[caseSubset]] <- do.call(cbind,resParts)
   ANOVAoutList[[caseSubset]] <- t(ANOVAoutList[[caseSubset]])
   countZeroFallbacks=sum(ANOVAoutList[[caseSubset]][,ncol(ANOVAoutList[[caseSubset]])])
-  cat(paste0("...Tukey p<1e-10 Fallback calculations using Bonferroni corrected T test: ", countZeroFallbacks, " [",signif(countZeroFallbacks/(nrow(tukresult1)*nrow(ANOVAoutList[[caseSubset]]))*100,2),"%]"))
+  if (fallbackIfSmallTukeyP) { cat(paste0("\n...Tukey p<1e-10 Fallback calculations using Bonferroni corrected T test: ", countZeroFallbacks, " [",signif(countZeroFallbacks/(nrow(tukresult1)*nrow(ANOVAoutList[[caseSubset]]))*100,2),"%]\n")) } else { cat(paste0(countZeroFallbacks," [",signif(countZeroFallbacks/(nrow(tukresult1)*nrow(ANOVAoutList[[caseSubset]]))*100,2),"%] of all p values are below reliable calculation threshold of 1e-10.\nIf you see a ceiling effect in volcanoes, consider setting fallbackIfSmallTukeyP=TRUE.\nNote that volcano fallback for Tukey p=0 will be underestimated (and -log(p) displayed will be overestimated).\n")) }
   ANOVAoutList[[caseSubset]] <- ANOVAoutList[[caseSubset]][,-ncol(ANOVAoutList[[caseSubset]])]
   ANOVAcols <- as.vector(data.frame(do.call("rbind", strsplit(as.character(line), "[,]"))))
   ANOVAcols <- ANOVAcols[2:length(ANOVAcols)]
@@ -183,13 +181,11 @@ plotVolc<- function(ANOVAout=ANOVAout,
 #                    outputfigs=getwd(),          # "drive:/folder/to/location" to save output PDFs and possible HTML files
                     env=.GlobalEnv) {
 
-############################
-## END PARAMETERS SECTION ##
-############################
+############################################
+## PARAMETER VARIABLES CHECKED / DEFAULTS ##
+############################################
 
 require(ggplot2,quietly=TRUE)
-
-#baseNameVolcanoes <- paste0(FileBaseName) #** paste0(FileBaseName,".",caseSubset)
 
 numberOfNonComparisonColumns=length(colnames(ANOVAout)) - length(which(grepl("diff ",colnames(ANOVAout))))*2
 numComp <- (length(colnames(ANOVAout)) - numberOfNonComparisonColumns) / 2 # of columns separating comparisons from matched column of log2(diffs), i.e. # of comparisons
@@ -221,8 +217,8 @@ if (!exists("NCcolor")) NCcolor="grey"
 if (!exists("splitColors")) splitColors=FALSE
 if (!exists("symbolsOnly")) symbolsOnly=FALSE
 if (!exists("HTMLout")) HTMLout=TRUE
-  if (!exists("outFilePrefix")) { outFilePrefix="" } else { outFilePrefix=paste0(outFilePrefix,".") }
-  if (!exists("outFileSuffix")) { if (exists("FileBaseName")) { outFileSuffix=paste0("-",FileBaseName) } else { outFileSuffix="-unspecified_study" }}
+if (!exists("outFilePrefix")) { outFilePrefix="" } else { if (nchar(outFilePrefix)>0) outFilePrefix=paste0(outFilePrefix,".") }
+if (!exists("outFileSuffix")) { if (exists("FileBaseName")) { outFileSuffix=paste0("-",FileBaseName) } else { outFileSuffix="-unspecified_study" }} else { if (nchar(outFileSuffix)>0) outFileSuffix=paste0("-",outFileSuffix) }
 if (!exists("outputfigs")) { cat(paste0("- Variable outputfigs not specified. Saving volcano plots to ",getwd()," .\n")); outputfigs=getwd(); }
 if (!dir.exists(outputfigs)) { cat(paste0("- Directory ",outputfigs," not found. Attempting to create it.\n")); dir.create(outputfigs); }
 
@@ -436,10 +432,6 @@ for (testIndex in testIndexMasterList) {
 ## Write Files
 if(splitColors) { dir.create(file.path(outputfigs, "/SplitVolcano/")) }
 
-if (nchar(outFilePrefix)>0) outFilePrefix=paste0(outFilePrefix,".")
-if (nchar(outFileSuffix)>0) outFileSuffix=paste0("-",outFileSuffix)
-
-
 # Print to PDFs, one per color (per comparison, if multiple)
 iter <- length(testIndexMasterList) + 1
 for (testIndex in testIndexMasterList) {
@@ -463,7 +455,7 @@ for (testIndex in testIndexMasterList) {
 
 ## Print to html volcano plots (one per module colors and per comparison, if applicable)
 if (HTMLout) {
-require(plotly, quietly=TRUE)
+suppressPackageStartupMessages(require(plotly, quietly=TRUE))
 
 iter <- length(testIndexMasterList) + 1
 for (testIndex in testIndexMasterList) {
@@ -492,3 +484,218 @@ assign("flip",flip, envir=.GlobalEnv)
 assign("FCmin",FCmin, envir=.GlobalEnv)
 assign("sigVolcCutoff",sigCutoff, envir=.GlobalEnv)
 }
+
+
+
+#######################################
+## Stacked Barplot Function          ##
+#######################################
+## - for percents of module members  ##
+##   reaching differential abundance ##
+#######################################
+## 
+## requires ggplot2, Cairo, WGCNA, scales packages
+##
+## ...requires ANOVAout prior creation, and net$MEs and net$colors (latter 2 are blockwiseModules WGCNA function output to slots in the list 'net')
+##
+
+DEXpercentStacked <- function(ANOVAout=ANOVAout,
+## All parameters are set as variables of the global environment, or if not set, fallback to defaults in the function.
+#                    selectComps=testIndexMasterList,     # can be set to "ALL" for all pairwise comparisons in ANOVAout, or column indices of ANOVAout where p values of pairwise comparisons are stored.
+#                                                 # Defaults to the columns selected for volcanoes.   
+#                    flip=c(),                    # p value column numbers in which to swap denominator of pair for x axis range (gene products high in denominator, will be on left)
+#                                                 # Already was set for volcanoes and exported from plotVolc() function to global environment.
+#                    signifP=0.05,                # p value threshold for counting Differential Abundance points
+#                    FCmin=0,                     # 0.25 for 25%, 0 for no threshold (vertical minimum FC threshold dashed lines)
+#                    outFilePrefix="4",           # typically "4", or step # in pipeline being run
+#                    outFileSuffix=FileBaseName,  # A description of the project, used as a filename suffix
+#                    outputfigs=getwd(),          # "drive:/folder/to/location" to save output PDFs and possible HTML files
+                    env=.GlobalEnv) {
+
+############################################
+## PARAMETER VARIABLES CHECKED / DEFAULTS ##
+############################################
+
+suppressPackageStartupMessages(require(ggplot2,quietly=TRUE))
+#suppressPackageStartupMessages(require(Cairo,quietly=TRUE))
+suppressPackageStartupMessages(require(WGCNA,quietly=TRUE))
+
+numberOfNonComparisonColumns=length(colnames(ANOVAout)) - length(which(grepl("diff ",colnames(ANOVAout))))*2
+numComp <- (length(colnames(ANOVAout)) - numberOfNonComparisonColumns) / 2 # of columns separating comparisons from matched column of log2(diffs), i.e. # of comparisons
+
+if(exists("testIndexMasterList")) selectComps=testIndexMasterList
+if (!exists("selectComps")) { cat("- No comparison p value columns selected in selectComps. Using ALL comparisons.\n"); selectComps="ALL"; }
+if (selectComps[1]=="ALL" | selectComps[1]=="all" | selectComps[1]=="All") selectComps=c(3:(numComp+2))
+selectComps=as.integer(selectComps)
+if (max(selectComps)>numComp+2 | min(selectComps)<3) stop("selectComps must be set to 'all' or valid integer p value column indexes of ANOVAout.\n       You have selected a non-p value containing column.")
+
+if(!exists("flip")) { cat("- No comparisons selected for flipping numerator and denominator. Variable flip=c().\n"); flip=c(); }
+
+if (!exists("FCmin")) { cat("- No minimum fold change set in FCmin. Using 0 minimum change.\n"); FCmin=0; }
+# log2(1) means NO change minimum to be counted in the volcano bookends; log2(1.25) for 25% FC min.
+cutoff <- log2(1+FCmin)
+
+# p value cutoff for Volcano significant hit counting; dashed line at -log10(sigCutoff)
+if (exists("sigVolcCutoff")) signifP=sigVolcCutoff
+if (!exists("signifP")) { cat("- No minimum significant p value threshold specified. Using signifP < 0.05.\n"); signifP=0.05; }
+sigCutoff <- signifP
+
+
+if (!exists("outFilePrefix")) { outFilePrefix="" } else { if (nchar(outFilePrefix)>0) outFilePrefix=paste0(outFilePrefix,".") }
+if (!exists("outFileSuffix")) { if (exists("FileBaseName")) { outFileSuffix=paste0("-",FileBaseName) } else { outFileSuffix="-unspecified_study" }} else { if (nchar(outFileSuffix)>0) outFileSuffix=paste0("-",outFileSuffix) }
+if (!exists("outputfigs")) { cat(paste0("- Variable outputfigs not specified. Saving volcano plots to ",getwd()," .\n")); outputfigs=getwd(); }
+if (!dir.exists(outputfigs)) { cat(paste0("- Directory ",outputfigs," not found. Attempting to create it.\n")); dir.create(outputfigs); }
+
+
+#Human DEX Tables Built from ANOVAout dataframe
+ANOVAin<-ANOVAout
+masterDEXlookup<-selectComps
+
+dexComps<-list()
+iter=length(masterDEXlookup)+1
+comparisonIDs <- data.frame(dfVariable=rep(NA,length(masterDEXlookup)),Comparison=rep(NA,length(masterDEXlookup)))
+for (i in masterDEXlookup) {
+ iter=iter-1;
+ dexRows<-which(ANOVAin[,i]<0.05) #choose rows where the DEX p<0.05
+ comparisonIDs[iter,] <- as.vector( c(paste0("dexTargets.",gsub("-",".",colnames(ANOVAin)[i])),paste0(as.character(gsub("-"," vs ",colnames(ANOVAin)[i])))))
+ dexComps[[comparisonIDs[iter,1]]] <- ANOVAin[dexRows,]
+ if(!is.na(match(i,flip))) { dexComps[[comparisonIDs[iter,1]]][,i+numComp] <- -1*as.numeric(dexComps[[comparisonIDs[iter,1]]][,i+numComp])
+  comparisonIDs[iter,2]<-gsub("(*.*) vs (*.*)","\\2 vs \\1",comparisonIDs[iter,2]) #flip label "vs" in comParisonIDs$Comparison[iter]
+ }
+}
+comparisonIDs #list element names and Logical comparisons for those retrievable Dex measurements in the list elements
+ls(dexComps) #list elements are dataframes with the DEX entries for that comparison
+
+#Add the column indexes to retrieve pVals and log2Diff for each comparison in the respective dexComps$ list element
+comparisonIDs$pValColIndex<-as.integer(c(rev(masterDEXlookup) ))
+comparisonIDs$log2DiffIndex<-as.integer(c((rev(masterDEXlookup)+numComp) ))
+
+#comparisonIDs  # Complete lookup table for Dex Target Comparisons
+
+
+#precalculate maxUP and maxDN to normalize scale of the plots
+maxDN<-0
+maxUP<-0
+yscaleMax<-0
+
+if("MEs" %in% names(net)) { MEs=net$MEs } else {
+  if(!exists("MEs")) {
+    cat("- MEs data frame for module eigengenes not found. Attempting to recalculate from cleanDat and net$colors...")
+    if(!exists("NETcolors")) if("colors" %in% names(net)) NETcolors=net$colors
+    if(!exists("cleanDat") | !exists("NETcolors")) stop("Cannot find NETcolors and/or cleanDat for ME calculation.")
+    MEs<-tmpMEs<-data.frame()
+    MEList = moduleEigengenes(t(cleanDat), colors = NETcolors)
+    MEs = orderMEs(MEList$eigengenes)
+    colnames(MEs)<-gsub("ME","",colnames(MEs))  # let's be consistent in case prefix was added, remove it.
+    if("grey" %in% colnames(MEs)) MEs[,"grey"] <- NULL
+  }
+}
+colnames(MEs)=gsub("ME","",colnames(MEs))
+if("grey" %in% colnames(MEs)) MEs[,"grey"] <- NULL
+
+orderedModules=colnames(MEs)
+nModules=length(orderedModules)
+
+
+cat("\nPerforming calculations for mean differential abundance and fractions of differential gene products per module:\n")
+dexCompsStacks<-list()
+for (redo in 1:2) { #repeat is necessary to equalize min and max blue and red color scheme across all plots
+for (z in 1:length(comparisonIDs$Comparison)) {
+
+dataframeName<-as.character(comparisonIDs$dfVariable[z])
+dexTargets<-dexComps[[comparisonIDs$dfVariable[z]]]  #retrieve z'th data frame of dexTargets<-eval(parse(text=paste0("dexComps$",comparisonIDs$dfVariable[z])))
+
+orderedLabels<- cbind(paste("M",seq(1:(nModules+20)),sep=""),labels2colors(c(1:(nModules+20))))
+# if you want the modules in order of relatedness from the module relatedness dendrogram:
+netcolSizeTable<-table(NETcolors)[which(!names(table(NETcolors))=="grey")]
+orderedModules2<-cbind(orderedModules,Size=netcolSizeTable[match(orderedModules,names(netcolSizeTable))])
+orderedLabelsByRelatedness<- cbind(Mnum= orderedLabels[ match(orderedModules,orderedLabels[,2]) ,1] ,Color=orderedModules )
+orderedLabelsByRelatedness<- cbind( orderedLabelsByRelatedness,Size=orderedModules2[,"Size"] )
+## Get fraction occupancy and average log2 diff for each group!
+#test of function: length(which(dexTargets$NETcolors=="turquoise" & dexTargets[,comparisonIDs$log2DiffIndex[z]]<0))
+downTargets<-sapply(1:nrow(orderedLabelsByRelatedness),function(x) length(which(dexTargets$NETcolors==orderedLabelsByRelatedness[x,"Color"] & dexTargets[,comparisonIDs$log2DiffIndex[z]]<0)))
+upTargets<-sapply(1:nrow(orderedLabelsByRelatedness),function(x) length(which(dexTargets$NETcolors==orderedLabelsByRelatedness[x,"Color"] & dexTargets[,comparisonIDs$log2DiffIndex[z]]>0)))
+otherTargets<-sapply(1:nrow(orderedLabelsByRelatedness),function(x) length(which(dexTargets$NETcolors==orderedLabelsByRelatedness[x,"Color"] & dexTargets[,comparisonIDs$log2DiffIndex[z]]==0)))
+orderedLabelsByRelatedness<-cbind(orderedLabelsByRelatedness,downTargets,upTargets,otherTargets)
+fractDown<-as.numeric(orderedLabelsByRelatedness[,"downTargets"])/as.numeric(orderedLabelsByRelatedness[,"Size"])
+fractUp<-as.numeric(orderedLabelsByRelatedness[,"upTargets"])/as.numeric(orderedLabelsByRelatedness[,"Size"])
+fractOther<-as.numeric(orderedLabelsByRelatedness[,"otherTargets"])/as.numeric(orderedLabelsByRelatedness[,"Size"])
+yscaleMax<-max( c(yscaleMax, max(eval(fractDown+fractUp+fractOther))) )
+downTargetAvg<-sapply(1:nrow(orderedLabelsByRelatedness),function(x) mean(as.numeric(dexTargets[,comparisonIDs$log2DiffIndex[z]][which(dexTargets$NETcolors==orderedLabelsByRelatedness[x,"Color"] & dexTargets[,comparisonIDs$log2DiffIndex[z]]<0)])))
+upTargetAvg<-sapply(1:nrow(orderedLabelsByRelatedness),function(x) mean(as.numeric(dexTargets[,comparisonIDs$log2DiffIndex[z]][which(dexTargets$NETcolors==orderedLabelsByRelatedness[x,"Color"] & dexTargets[,comparisonIDs$log2DiffIndex[z]]>0)])))
+otherTargetAvg<-sapply(1:nrow(orderedLabelsByRelatedness),function(x) mean(as.numeric(dexTargets[,comparisonIDs$log2DiffIndex[z]][which(dexTargets$NETcolors==orderedLabelsByRelatedness[x,"Color"] & dexTargets[,comparisonIDs$log2DiffIndex[z]]==0)])))
+orderedLabelsByRelatedness<-cbind(orderedLabelsByRelatedness,fractDown,fractUp,fractOther,downTargetAvg,upTargetAvg,otherTargetAvg)
+
+#Colorscale 
+#bw<-colorRampPalette(c("#0058CC", "white"))
+wb<-colorRampPalette(c("white","#0058CC")) # #0058CC"))
+wr<-colorRampPalette(c("white", "#CC3300")) # #CC3300"))
+colvecwb<-wb(100)
+colvecwr<-wr(100)
+maxDN<-max( c(maxDN, max(abs(downTargetAvg),na.rm=T)) )
+maxUP<-max( c(maxUP, max(upTargetAvg,na.rm=T)) )
+print(paste0(round(maxDN,2)," - max down average log2"))
+print(paste0(round(maxUP,2)," + max up average log2"))
+vecDN<- -sapply(1:nrow(orderedLabelsByRelatedness),function(x) round( as.numeric(orderedLabelsByRelatedness[x,"downTargetAvg"])/maxDN*100, 0 ))
+vecUP<-sapply(1:nrow(orderedLabelsByRelatedness),function(x) round( as.numeric(orderedLabelsByRelatedness[x,"upTargetAvg"])/maxUP*100, 0 ))
+vecOTHER<-sapply(1:nrow(orderedLabelsByRelatedness),function(x) round( as.numeric(orderedLabelsByRelatedness[x,"otherTargetAvg"])*0, 0 )) #*0 insures these will be white.
+colvecDN<-sapply(1:nrow(orderedLabelsByRelatedness),function(x) colvecwb[vecDN[x]])
+colvecUP<-sapply(1:nrow(orderedLabelsByRelatedness),function(x) colvecwr[vecUP[x]])
+colvecOTHER<-sapply(1:nrow(orderedLabelsByRelatedness),function(x) colvecwr[vecOTHER[x]])
+colvecDN<-lapply(colvecDN, function(x) if (identical(x,character(0))) {"#FFFFFF" } else { x }) #HANDLE rounded values that were 0 (target averages less than 0.005)
+colvecUP<-lapply(colvecUP, function(x) if (identical(x,character(0))) {"#FFFFFF" } else { x })
+colvecOTHER<-lapply(colvecOTHER, function(x) if (identical(x,character(0))) {"#FFFFFF" } else { x })
+
+colvec<-c(unlist(colvecDN),unlist(colvecUP),unlist(colvecOTHER))
+meltPlotMANUAL<-data.frame(Mnum=rep(as.vector(orderedLabelsByRelatedness[,"Mnum"]),3),variable=c(rep(1,nrow(orderedLabelsByRelatedness)),rep(2,nrow(orderedLabelsByRelatedness)),rep(3,nrow(orderedLabelsByRelatedness))),value=c(as.vector(orderedLabelsByRelatedness[,"fractDown"]),as.vector(orderedLabelsByRelatedness[,"fractUp"]),as.vector(orderedLabelsByRelatedness[,"fractOther"])),sort2=rep(c(1:nrow(orderedLabelsByRelatedness)),3),colvec=as.vector(colvec), meanLog2FC=c(as.vector(orderedLabelsByRelatedness[,"downTargetAvg"]),as.vector(orderedLabelsByRelatedness[,"upTargetAvg"]),as.vector(orderedLabelsByRelatedness[,"otherTargetAvg"])))
+rownames(meltPlotMANUAL)<-NULL
+meltPlotMANUAL2<-meltPlotMANUAL[order(as.numeric(meltPlotMANUAL$sort2),meltPlotMANUAL[,"variable"], decreasing=FALSE),]
+rownames(meltPlotMANUAL2)<-NULL
+meltPlotMANUAL2$Mnum<-factor(meltPlotMANUAL2$Mnum,levels=unique(meltPlotMANUAL2$Mnum))
+meltPlotMANUAL2$meanLog2FC[meltPlotMANUAL2$meanLog2FC=="NaN"]<- 0
+dexCompsStacks[[comparisonIDs$dfVariable[z]]] <- meltPlotMANUAL2
+}
+} #2 iterations to get min and max colors right having considered all plots min and max values from first iteration.
+# note: yscaleMax never needs to be >1
+
+## Plot stacked bars and use common color scale for all plots of pairwise comparison DEP fractions' average log2FC
+suppressPackageStartupMessages(require(scales,quietly=TRUE))
+
+colorData=data.frame(Mnum=as.character(unique(dexCompsStacks[[comparisonIDs$dfVariable[z]]]$Mnum)),yBlank=c(0), fill=gplots::col2hex(unique(WGCNA::labels2colors(as.numeric(gsub("M","",as.character(unique(dexCompsStacks[[comparisonIDs$dfVariable[z]]]$Mnum))))))), fillName=unique(WGCNA::labels2colors(as.numeric(gsub("M","",as.character(unique(dexCompsStacks[[comparisonIDs$dfVariable[z]]]$Mnum)))))))
+plot.inset <- ggplot(colorData, aes(x=Mnum, y=rep(1,nrow(colorData)))) + geom_bar(stat="identity", fill=colorData$fill, color="#000000", aes(fill=fillName)) +
+  scale_x_discrete( limits=colorData$Mnum)   + theme(axis.text.x=element_text(angle=90, hjust=1, vjust=0.3), axis.text.y=element_text(color="#FFFFFF")) + labs(x="", y="") + theme(axis.title = element_text(color="#FFFFFF", face="bold", size=22), axis.text.x = element_text(face="bold", color="#000000", size=14, angle=90), axis.ticks.y=element_blank(), panel.background = element_rect(fill = "transparent",colour = NA), panel.grid.minor = element_blank(), panel.grid.major = element_blank(), plot.background = element_rect(fill = "transparent",colour = NA)) + scale_y_continuous(expand = expansion(mult = c(0, 0)), limits=c(0,1), breaks=c(0), label=c("")) + theme(plot.title=element_text(color="black", face="bold", size=32))
+grob.inset <- ggplotGrob(plot.inset)
+
+for (z in 1:length(comparisonIDs$Comparison)) {
+ pdf(file=paste0(outputfigs,"/",outFilePrefix,"ANOVA.dex-FractionBar-",gsub("\\s","_",comparisonIDs$Comparison[z]),outFileSuffix,".pdf"),width=15,height=11.25, onefile=FALSE)  # onefile=FALSE for forcing no blank page 1.
+ par(mfrow=c(2,1))
+ par(mar=c(5,6,4,2))
+
+ print(
+ ggplot(dexCompsStacks[[comparisonIDs$dfVariable[z]]], aes(x=Mnum, y=as.numeric(value))) + geom_bar(stat="identity", color="#000000", aes(fill=as.numeric(dexCompsStacks[[comparisonIDs$dfVariable[z]]]$meanLog2FC))) + labs(x=" \n ", y="DEx, Fraction of Module Members") + theme(axis.title = element_text(color="#000000", face="bold", size=22), axis.ticks.x=element_blank(), axis.text.x = element_blank(), axis.text.y = element_text(face="bold", color="#000000", size=14, angle=0), panel.background = element_rect(fill = "transparent",colour = NA), panel.grid.minor = element_blank(), panel.grid.major = element_blank(), plot.background = element_rect(fill = "transparent",colour = NA)) + scale_y_continuous(limits=c(0,ceiling(yscaleMax*100)/100)) +
+               scale_fill_gradient2(name="mean log2FC\n", limits=c(-maxDN,maxUP), oob = scales::squish, breaks=c(-maxDN*0.99999,-maxDN/2,0,maxUP/2,maxUP*0.99999), labels=c(round(-maxDN,2), round(-maxDN/2,2), 0, round(maxUP/2,2), round(maxUP,2)), minor_breaks=NULL, low="#0058CC", mid="white", high="#CC3300", midpoint=0, space="Lab", na.value="grey50", guide=guide_colorbar(label=TRUE, draw.ulim=TRUE, draw.llim = TRUE, frame.colour = "black", ticks = TRUE, barwidth=30, barheight=1.2, ticks.colour='black', direction='horizontal'), aesthetics="fill") + theme(legend.position="top", legend.text=element_text(size=13), legend.title.align=0) +
+               ggtitle(as.character(comparisonIDs$Comparison[z])) + theme(plot.title=element_text(color="black", face="bold", size=32)) +
+   annotation_custom(grob = grob.inset, xmin = 0.05-(-3.5/nrow(colorData)+1.8/70*nrow(colorData)), xmax = nrow(colorData)+(0.62+0.3/70*nrow(colorData)), ymin = -(0.11+0.46/nrow(colorData))*yscaleMax, ymax = 0 )
+ )
+
+# Prior way of filling bars used precalculated fill; no way to put these on a legend scale.
+# ggplot(dexCompsStacks[[comparisonIDs$dfVariable[z]]], aes(x=Mnum, y=as.numeric(value))) + geom_bar(stat="identity", fill=dexCompsStacks[[comparisonIDs$dfVariable[z]]]$colvec, color="#000000") + labs(x=" \n ", y="DEPs, Fraction of Module Members") + theme(axis.title = element_text(color="#000000", face="bold", size=22), axis.ticks.x=element_blank(), axis.text.x = element_blank(), axis.text.y = element_text(face="bold", color="#000000", size=14, angle=0), panel.background = element_rect(fill = "transparent",colour = NA), panel.grid.minor = element_blank(), panel.grid.major = element_blank(), plot.background = element_rect(fill = "transparent",colour = NA)) + scale_y_continuous(limits=c(0,ceiling(yscaleMax*100)/100)) +
+#               ggtitle(as.character(comparisonIDs$Comparison[z])) + theme(plot.title=element_text(color="black", face="bold", size=32 rotate=90)) +
+#   annotation_custom(grob = grob.inset, xmin = 0.05-(-3.5/nrow(colorData)+1.8/70*nrow(colorData)), xmax = nrow(colorData)+(0.62+0.3/70*nrow(colorData)), ymin = -(0.11+0.46/nrow(colorData))*yscaleMax, ymax = 0 ) )
+dev.off()
+}
+
+} # close DEXpercentStacked function
+
+
+## adjustments to swatch positions as inset with annotation_custom() of grob.inset above
+#-.55, +.75   @ 23 modules
+#-2.35 +1.05  @ 93 modules
+#0.3 / 70
+#-1.8 / 70
+#ymin scaling factor:
+#-0.11 @ 93 modules
+#-0.2  @ 23 modules
+#0.09 / 70
+
+#0.05 to the rigt (tested @ 23 modules)
