@@ -1,18 +1,23 @@
 ########################################################################################################
-## ANOVA / DiffEx -- create ANOVAout dataframe of tests for differential expression/abundance
-##                -- create PDF and HTML Volcanoe Plots
+## ANOVA / DiffEx -- 3 user functions:
+##
+##   parANOVA.dex      -- create ANOVAout dataframe of tests for differential expression/abundance
+##   plotVolc          -- create PDF and HTML Volcano Plots, output volcano settings to variables used later
+##   DEXpercentStacked -- create PDF 
 ##
 ## By Eric Dammer, Duc Duong, and Qiudong Deng
 #########################################
 ## NOTES
 ##
-## - can repeat for different subgroup comparisons, if necessary
-## - parallelized function. Requires doParallel, parallel, and dependencies
-## - writes DEX table to pipeline variable ANOVAout and .csv, optionally
-## - 0 Tukey values cannot be resuced with precision if <1e-9 or -10;
-## - Option to fallback from 0 Tukey p values to Bonferroni-corrected T test (unequal variance)
-## - if only 2 comparison groups are present, ANOVA overall p value is equivalent to T test; FDR correction for all proteinwide comparisons provided in that special case (default="BH").
-## - avoid dashes ("-") in group names (set in vector of character strings to Grouping parameter)
+## - Output ANOVA+Tukey pairwise stats for volcano and downstream analyses
+## - if only 2 comparison groups are present, ANOVA overall p value is equivalent to T test;
+##   FDR correction for all proteinwide comparisons provided in that special case (default twoGroupCorrMethod="BH")
+## - can be repeat for different subgroup comparisons, if necessary
+## - parallelized function. Requires R packages doParallel, parallel, and dependencies
+## - writes DEX table typically to pipeline variable ANOVAout and .csv table
+## - 0 Tukey values are inaccurate when <1e-9 or -10; Estimates of very small values become 0 in R base Tukey post hoc calculations.
+## - So, we implement an option to fallback from Tukey p values less than 1e-10 to Bonferroni-corrected T test (unequal variance)
+## - avoid dashes ("-") in strings representing comparison groups (Grouping vector); they will be substituted with '.'
 ##
 ##
 #########################################
@@ -24,27 +29,21 @@ setwd(rootdir)
 load("SeyfriedPipelineOutput-test.RData")
 
 
-# Parameters (default for function if unspecified here are generally the same as below in this template)
-                         Grouping=numericMeta$Group                     # Named groups (N>=2) for comparison of difference of means, in sample (column) order of cleanDat; same # of values as samples.
-                         parallelThreads=30                             # number of CPU threads to speed calculation (recommended, 2 or more):
-                         NETcolors=net$colors                           # list net with slot/vector containing module color assignments; length of vector must be equal to number of rows in cleanDat.
-                         twoGroupCorrMethod="BH"                        # default method for full FDR correction when only 2 groups present is Benjamini-Hochberg; see p.adjust(..., methods= ) options.
-                         outputCSV=TRUE                                 # Output Full Table of statistics?  TRUE/FALSE
-                         outFilePrefix="4"                              # typically "4", or step # in pipeline being run
-                         outFileSuffix=FileBaseName                     # A description of the project, used as a filename suffix
-                         fallbackIfZeroTukeyP=TRUE 
-
-
-## Create parallel backend before running the function -- what options you use depends on your computer and OS.
-  library(parallel)
-  library(doParallel)
-  stopCluster(clusterLocal)
-  clusterLocal <- snow::makeCluster(c(rep("localhost",parallelThreads)),type="SOCK")
-  registerDoParallel(clusterLocal)
+# Parameters (function may fallback to defaults if unspecified)
+Grouping=numericMeta$Group                     # Named groups (N>=2) for comparison of difference of means, in sample (column) order of cleanDat; same # of values as samples.
+parallelThreads=30                             # number of CPU threads to speed calculation (recommended, 2 or more):
+NETcolors=net$colors                           # list net with slot/vector containing module color assignments; length of vector must be equal to number of rows in cleanDat.
+twoGroupCorrMethod="BH"                        # default method for full FDR correction when only 2 groups present is Benjamini-Hochberg; see p.adjust(..., methods= ) options.
+outputCSV=TRUE                                 # Output Full Table of statistics?  TRUE/FALSE
+outFilePrefix="4"                              # typically "4", or step # in pipeline being run; for output file sorting by filename.
+outFileSuffix="DeepADproteome"                 # A description of the project, used as a filename suffix
+fallbackIfSmallTukeyP=TRUE                     # Inaccurate Tukey p values < 1e-10 will not replaced with reliable Bonferroni FDR from T test for the pairwise comparison.
 
 
 source("./parANOVA.dex.R")
-ANOVAout <- parANOVA.dex(cleanDat)
+ANOVAout <- parANOVA.dex()
+#...Tukey p<1e-10 Fallback calculations using Bonferroni corrected T test: 8167 [15%]
+
 
 ## Before plotting volcanoes, choose comparison (column #s) to flip denominator in log2(ratios);
 ## - any column numbers specified flip the volcano X axis for that pairwise comparison.
@@ -57,21 +56,21 @@ head(ANOVAout)
 #PLEC|Q15149    116.386227 2.931614e-54 2.255820e-23 3.634339e-05 6.752541e-02 2.246769e-10 4.576154e-55 0.004697824 -0.668760920   -0.287562376     -0.10669039  0.381198545   0.562070535     0.180871990 turquoise
 #SYNE1|Q8NF91    33.090858 3.909341e-19 8.525109e-10 1.189322e-02 3.295228e-03 6.598376e-04 3.003174e-15 0.854027054  0.114212304    0.053553888      0.04160811 -0.060658416  -0.072604192    -0.011945776      blue
 
+#-------------- ---------- ------------ THESE COLUMNS ARE TUKEY POST-HOC P VALUE COLUMNS FOR PAIRWISE COMPARISONS---  THESE COLUMNS ARE LOG2 MEAN GROUP DIFFERENCES FOR THE SAME PAIRWISE COMPARISONS------
 
-
-## Generate Volcano plots, PDF and possibly interactive (mouseover) HTML
-#########################################################################
-
-########################
-##   Volcano Plots    ##
-########################
-## Default Parameters ##
-## - set in fn call - ##
-########################
+########################################
+## Volcano Plots: PDF and HTML        ##
+########################################
+## Parameters set as variables here.  ##
+########################################
+## Most will be set to default values ##
+## if not explicitly specified.       ##
+########################################
 
 FCmin=0                    # 0.25 for 25%, 0 for no threshold (vertical minimum FC threshold dashed lines)
 selectComps="ALL"          # "ALL" for volcano output(s) on all pairwise comparisons in ANOVAout
-flip=c()                   # p value column numbers in which to swap denominator of pair for x axis range (gene products high in denominator, will be on left)
+flip=c(3,4,5)              # ANOVAout column index numbers for p values in which to swap denominator of pair for x axis range (gene products high in denominator, will be on left)
+                           # As a general rule, the group with less severe effects is usually set to be the denominator (represented by what is right of '-' in ANOVAout column names)
 signifP=0.05               # p value threshold for counting Differential Expression points
 useNETcolors=TRUE          # use module colors saved to ANOVAout, if available; otherwise when FALSE, specify downColor upColor, and NCcolor (must be valid R color specifications in quotes)
 downColor="royalblue"      # significant points above/beyond thresholds on the upper left are this color if useNETcolors=FALSE
@@ -82,20 +81,33 @@ highlightGeneProducts=c()  # c("APP|P05067","MAPT|P10636","APOE|P02649") ; a lis
 symbolsOnly=FALSE          # for mouse-over HTML plots and the above highlight callouts, consider only displaying and using official gene symbol from first part of UniqueID rownames of ANOVAout.
 HTMLout=TRUE               # output interactive HTML copies that can be opened in browser. Requires plotly package.
 outFilePrefix="4"          # typically "4", or step # in pipeline being run
-outFileSuffix=FileBaseName # A description of the project, used as a filename suffix
-outputFigs=getwd()         # Location to save figure file output(s)
+outFileSuffix="DeepADproteome"
+                           # A description of the project, used as a filename suffix
+outputfigs=getwd()         # Location to save figure file output(s)
 
-plotVolc(ANOVAout, flip=c(3,4,5))
+plotVolc(ANOVAout)
 
-# not run: highlight gene products of interest:
-# plotVolc(ANOVAout, flip=c(3,4,5), highlightGeneProducts=c("APP","SMOC1","MAPT"), symbolsOnly=TRUE)
+## not run: highlight gene products of interest:
+# highlightGeneProducts=c("APP","SMOC1","MAPT")
+# symbolsOnly=TRUE
+# plotVolc(ANOVAout)
 
-# not run:  highlight gene products of interest by symbol, and do not use WGCNA module colors:
-# plotVolc(ANOVAout, flip=c(3,4,5), useNETcolors=FALSE, highlightGeneProducts=c("APP","SMOC1","MAPT"), symbolsOnly=TRUE)
+## not run:  highlight gene products of interest by symbol, and do not use WGCNA module colors:
+# flip=c(3,4,5)
+# useNETcolors=FALSE
+# highlightGeneProducts=c("APP","SMOC1","MAPT")
+# symbolsOnly=TRUE
+# plotVolc(ANOVAout)
 
 
 
+########################################
+## DEx Stacked Bar Plots: PDF(s)      ##
+########################################
+## Parameters set as variables here.  ##
+########################################
+## Most will be set to default values ##
+## and using plotVolc exported vars.  ##
+########################################
 
-
-
-#save.image(paste0("4.saved.image.",FileBaseName,".RData"))  #overwrites if present
+DEXpercentStacked(ANOVAout)
