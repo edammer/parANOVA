@@ -1,39 +1,62 @@
-########################################################################################################
-## ANOVA / DiffEx -- list of ANOVAout dataframes for different subgroup comparisons, if necessary
+######################################################################################################################
+## ANOVA / DiffEx Functions
 ##
-## By Eric Dammer and Duc Duong
-#########################################
+## parANOVA.dex()     - output ANOVAout dataframe for all pairwise comparisons of each cleanDat gene product (row)
+##                      among specified sample groups in the vector Grouping
+## plotVolc(ANOVAout) - using output of parANOVA.dex(), output PDF and plotly HTML volcano plots
+##
+## DEXpercentStacked(ANOVAout)
+##                    - using output of parANOVA.dex(), plotVolc settings, plus modules in memory,
+##                      output pdf with a page for each pairwise comparison showing % of module members meeting
+##                      differential expression criteria in volcano.
+##
+#################################################
+## By Eric Dammer, Duc Duong, and Qiudong Deng ##
+#################################################
 
 
-#########################################
-## Required Loaded Data and Parameters ##
-#########################################
+######################################
+## Required variables as Parameters ##
+######################################
 
 
-#parANOVA.dex <- function(cleanDat.=cleanDat, ..., env=.GlobalEnv) {     # cleanDat, data table of 'cleaned' relative abundance with rows (genes or proteins) and columns (samples)
-parANOVA.dex <- function(cleanDat.=cleanDat,                             # cleanDat, data table of 'cleaned' relative abundance with rows (genes or proteins) and columns (samples)
-                         Grouping=numericMeta$Group,                     # Named groups (N>=2) for comparison of difference of means, in sample (column) order of cleanDat
-                         parallelThreads=30,                             # number of CPU threads to speed calculation (recommended, 2 or more):
-#                         NETcolors=net$colors,                          # set outside this function; a vector containing module color assignments;
-                                                                         # length of vector must be equal to number of rows in cleanDat.
-                                                                         # Colors are only added to table output if available; function tries to use NETcolors variable , with fallback to net$colors
-                         twoGroupCorrMethod="BH",                        # default method for full FDR correction when only 2 groups present is Benjamini-Hochberg
-                         outputCSV=TRUE,                                 # Output Full Table of statistics?  TRUE/FALSE
-                         outFilePrefix="4",                              # typically "4", or step # in pipeline being run
-                         outFileSuffix=FileBaseName,                     # A description of the project, used as a filename suffix
-                         fallbackIfZeroTukeyP=TRUE, env=.GlobalEnv) {
+parANOVA.dex <- function(dummyVar="",
+## All parameters are set as variables of the global environment, or if not set, fallback to defaults in the function.
+#                         cleanDat.=cleanDat,                             # cleanDat, data table of 'cleaned' relative abundance with rows (genes or proteins) and columns (samples)
+#                         Grouping=numericMeta$Group,                     # Named groups (N>=2) for comparison of difference of means, in sample (column) order of cleanDat
+#                         parallelThreads=30,                             # number of CPU threads to speed calculation (recommended, 2 or more)
+#                         NETcolors=net$colors,                           # a vector containing module color assignments
+#                                                                         # length of vector must be equal to number of rows in cleanDat.
+#                                                                         # Colors are only added to table output if available; function tries to use NETcolors variable , with fallback to net$colors
+#                         twoGroupCorrMethod="BH",                        # default method for full FDR correction when only 2 groups present is Benjamini-Hochberg
+#                         outputCSV=TRUE,                                 # Output Full Table of statistics?  TRUE/FALSE
+#                         outFilePrefix="4",                              # typically "4", or step # in pipeline being run
+#                         outFileSuffix=FileBaseName,                     # A description of the project, used as a filename suffix
+#                         fallbackIfSmallTukeyP=TRUE,
+                         env=.GlobalEnv) {
 
-############################
-## END PARAMETERS SECTION ##
-############################
-  if(!exists("cleanDat.")) stop("cleanDat must be supplied, in form of log2(relative abundance) data with rows as genes/proteins and columns as samples.")
+############################################
+## PARAMETER VARIABLES CHECKED / DEFAULTS ##
+############################################
+  if (!exists("cleanDat")) stop("cleanDat variable must exist, holding gene product (rows) X sample (columns) data in the form of log2(relative abundance).")
+  if (!exists("Grouping")) { if ("Group" %in% colnames(numericMeta)) { Grouping=numericMeta[,"Group"] } else { stop("Grouping vector not found. Must specify a group for every sample column in cleanDat.\n") }}
 
-  ## Set up parallel backend as a local cluster using n (parallelThreads) CPU threads (in the .GlobalEnv outside of this function!)
-#  require(doParallel, quietly=TRUE)
+  if (!exists("parallelThreads")) { cat("- parallelThreads variable not set. Running with 2 threads only.\n"); parallelThreads=2; }
+  if (!exists("NETcolors")) if(exists("net")) { if ("colors" %in% names(net)) { NETcolors=net$colors } else { NETcolors=c() } } else { NETcolors=c() }
+  if (!length(NETcolors)==nrow(cleanDat)) { cat("- Network color assignment vector not supplied or not of length in rows of cleanDat; will not be included in output table and data frame.\n") }
+  if (!exists("twoGroupCorrMethod")) { cat("- twoGroupCorrMethod variable not set to a correction method for p.adjust when only 2 groups of samples specified in Grouping. Using Benjamini Hochberg 'BH' FDR.\n"); twoGroupCorrMethod="BH"; }
+  if (!exists("outputCSV")) outputCSV=TRUE
+  if (!exists("outFilePrefix")) { outFilePrefix="" } else { outFilePrefix=paste0(outFilePrefix,".") }
+  if (!exists("outFileSuffix")) { if (exists("FileBaseName")) { outFileSuffix=paste0("-",FileBaseName) } else { outFileSuffix="-unspecified_study" }}
+  if (!exists("fallbackIfSmallTukeyP")) { cat("- fallbackIfSmallTukeyP variable not set. Using recommended Bonferroni t-test FDR for unreliable Tukey p values <1e-10.\n"); fallbackIfSmallTukeyP=TRUE; }
+  if (!is.logical(fallbackIfSmallTukeyP)) { cat("- fallbackIfSmallTukeyP variable not TRUE/FALSE. Using recommended Bonferroni t-test FDR for unreliable Tukey p values <1e-10.\n"); fallbackIfSmallTukeyP=TRUE; }
+
+## Set up parallel backend as a local cluster using n (parallelThreads) CPU threads (in the .GlobalEnv outside of this function!)
+  require(doParallel, quietly=TRUE)
   require(parallel, quietly=TRUE)
-  #if(exists("clusterLocal")) stopCluster(clusterLocal) #in case already started.
-#  clusterLocal <- makeCluster(c(rep("localhost",parallelThreads)),type="SOCK")
-#  registerDoParallel(clusterLocal)
+  if(exists("clusterLocal")) stopCluster(clusterLocal) #in case already started.
+  clusterLocal <- makeCluster(c(rep("localhost",parallelThreads)),type="SOCK")
+  registerDoParallel(clusterLocal)
 
   if (nchar(outFilePrefix)>0) outFilePrefix=paste0(outFilePrefix,".")
   if (nchar(outFileSuffix)>0) outFileSuffix=paste0("-",outFileSuffix)
@@ -41,7 +64,7 @@ parANOVA.dex <- function(cleanDat.=cleanDat,                             # clean
   ANOVAoutList<-list()
   caseSubset="ALL"
 
-  data = as.data.frame(cbind(as.character(colnames(cleanDat.)), as.character(Grouping), t(cleanDat.)))
+  data = as.data.frame(cbind(as.character(colnames(cleanDat)), as.character(Grouping), t(cleanDat)))
   colnames(data)[1:2]<-c("CODE","SampleType")
   #test run gets column headers for output
   i=3
@@ -60,18 +83,18 @@ parANOVA.dex <- function(cleanDat.=cleanDat,                             # clean
     line=c(paste(line,paste0("diff ",comparisonList[a]),sep=","))
   }
 
-  ## Fast code with parApply
+## Fast parallel code
   dataclipped <- data[, 3:ncol(data)] # as.matrix(as.numeric(data[,3:ncol(data)]))
   SampleType <- as.character(data$SampleType)
-  parallel::clusterExport(cl=clusterLocal, list("SampleType","tukresult1","fallbackIfZeroTukeyP"), envir=environment())  # below helperfn not running in .GlobalEnv
+  parallel::clusterExport(cl=clusterLocal, list("SampleType","tukresult1","fallbackIfSmallTukeyP"), envir=environment())  # below helperfn not running in .GlobalEnv
   parts <- splitIndices(ncol(dataclipped), length(clusterLocal))
   dataclippedParts <- lapply(parts, function(i) dataclipped[,i,drop=FALSE])
-#  resParts <- parallel::parApply(cl=clusterLocal, dataclippedParts, 2, function(x) {
+#  resParts <- parallel::parApply(cl=clusterLocal, dataclippedParts, 2, function(x) {  #parApply call from within function does not parallelize.
   resParts <- parallel::clusterApply(cl=clusterLocal, dataclippedParts, helperfn)
   ANOVAoutList[[caseSubset]] <- do.call(cbind,resParts)
   ANOVAoutList[[caseSubset]] <- t(ANOVAoutList[[caseSubset]])
   countZeroFallbacks=sum(ANOVAoutList[[caseSubset]][,ncol(ANOVAoutList[[caseSubset]])])
-  print(paste0("...Tukey p=0 Fallback calculations using Bonferroni corrected T test: ", countZeroFallbacks, " [",signif(countZeroFallbacks/(nrow(tukresult1)*nrow(ANOVAoutList[[caseSubset]]))*100,2),"%]"))
+  cat(paste0("...Tukey p<1e-10 Fallback calculations using Bonferroni corrected T test: ", countZeroFallbacks, " [",signif(countZeroFallbacks/(nrow(tukresult1)*nrow(ANOVAoutList[[caseSubset]]))*100,2),"%]"))
   ANOVAoutList[[caseSubset]] <- ANOVAoutList[[caseSubset]][,-ncol(ANOVAoutList[[caseSubset]])]
   ANOVAcols <- as.vector(data.frame(do.call("rbind", strsplit(as.character(line), "[,]"))))
   ANOVAcols <- ANOVAcols[2:length(ANOVAcols)]
@@ -85,9 +108,8 @@ parANOVA.dex <- function(cleanDat.=cleanDat,                             # clean
 
   numComp=(ncol(ANOVAoutList[[caseSubset]])-2)/2
 
-  ## Add network module colors, if they can be found.
-  if(!exists("NETcolors")) if(exists("net")) { if ("colors" %in% names(net)) { NETcolors=net$colors } else { NETcolors=c() } } else { NETcolors=c() }
-  if (length(NETcolors)==nrow(ANOVAoutList[[caseSubset]])) { ANOVAoutList[[caseSubset]]$NETcolors <- NETcolors } else { warning("Network color assignment vector not of length in rows of cleanDat supplied -- not included in output table.") }
+  ## Add network module colors, if they can be found for all output rows/gene products.
+  if (length(NETcolors)==nrow(ANOVAoutList[[caseSubset]])) { ANOVAoutList[[caseSubset]]$NETcolors <- NETcolors }
 
   #*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+
   if(outputCSV)  write.csv(ANOVAoutList[[caseSubset]],file=paste0(outFilePrefix,"ANOVA_diffEx-",caseSubset,outFileSuffix,".csv"))
@@ -111,10 +133,10 @@ helperfn <- function(xx) {
     tuk <- TukeyHSD(aov)
     tukresult <- data.frame(tuk$SampleType)
     if (!length(rownames(tukresult)) == length(rownames(tukresult1))) tukresult <- tukresult[match(rownames(tukresult1), rownames(tukresult)), ]
-    if (fallbackIfZeroTukeyP) {
-      # Fallback to Bonferroni correction of t.test output if Tukey p returned as 0:
-      zeroFallbacks=length(which(tukresult[,"p.adj"]==0))
-      if (zeroFallbacks>0) for (comp in which(tukresult[,"p.adj"]==0)) {
+    if (fallbackIfSmallTukeyP) {
+      # Fallback to Bonferroni correction of t.test output if Tukey p returned as <1e-10 (complex Tukey approximation integral calculation has a ceiling effect or zero value output, beyond 1e-10) per https://stackoverflow.com/questions/16470404/tukeyhsd-adjusted-p-value-is-0-0000000
+      zeroFallbacks=length(which(tukresult[,"p.adj"]<1e-10))
+      if (zeroFallbacks>0) for (comp in which(tukresult[,"p.adj"]<1e-10)) {
         this.comp=rownames(tukresult)[comp]
         grp1=gsub("^(.*)\\-.*","\\1",this.comp)
         grp2=gsub("^.*\\-(.*)$","\\1",this.comp)
@@ -127,7 +149,7 @@ helperfn <- function(xx) {
 
     })  #close apply()
 
-#  }, chunk.size = round(ncol(dataclipped)/parallelThreads,0)) #end parApply
+#  }, chunk.size = round(ncol(dataclipped)/parallelThreads,0)) #end parApply; this failed to parallelize
   } # end function helperfn
 
 
@@ -143,21 +165,22 @@ helperfn <- function(xx) {
 ##
 
 plotVolc<- function(ANOVAout=ANOVAout,
-                    FCmin=0,                     # 0.25 for 25%, 0 for no threshold (vertical minimum FC threshold dashed lines)
-                    selectComps="ALL",           # "ALL" for volcano output(s) on all pairwise comparisons in ANOVAout
-                    flip=c(),                    # p value column numbers in which to swap denominator of pair for x axis range (gene products high in denominator, will be on left)
-                    signifP=0.05,                # p value threshold for counting Differential Expression points
-                    useNETcolors=TRUE,           # use module colors saved to ANOVAout, if available; otherwise specify downColor upColor, and NCcolor
-                    downColor="royalblue",       # significant points above/beyond thresholds on the upper left are this color if useNETcolors=FALSE
-                    upColor="red",               # significant points above/beyond thresholds on the upper right are this color if useNETcolors=FALSE
-                    NCcolor="grey",              # points not significant are this color if useNETcolors=FALSE
-                    splitColors=FALSE,           # create a separate volcano plot(s) for each color in an outputfigs/splitVolcanoes subfolder (folder created if it does not exist)
-                    highlightGeneProducts=c(),   # c("APP|P05067","MAPT|P10636","APOE|P02649") ; a list of uniqueID rownames to highlight as larger gold points. If symbolsOnly=TRUE, this can be a list of symbols, like c("APP","SMOC1","MAPT")
-                    symbolsOnly=FALSE,           # for mouse-over HTML plots and the above highlight callouts, consider only displaying and using official gene symbol from first part of UniqueID rownames of ANOVAout.
-                    HTMLout=TRUE,                # output interactive HTML copies that can be opened in browser. Requires plotly package.
-                    outFilePrefix="4",           # typically "4", or step # in pipeline being run
-                    outFileSuffix=FileBaseName,  # A description of the project, used as a filename suffix
-                    outputfigs=getwd(),          # "drive:/folder/to/location" to save output PDFs and possible HTML files
+## All parameters are set as variables of the global environment, or if not set, fallback to defaults in the function.
+#                    FCmin=0,                     # 0.25 for 25%, 0 for no threshold (vertical minimum FC threshold dashed lines)
+#                    selectComps=selectComps,     # "ALL" for volcano output(s) on all pairwise comparisons in ANOVAout
+#                    flip=c(),                    # p value column numbers in which to swap denominator of pair for x axis range (gene products high in denominator, will be on left)
+#                    signifP=0.05,                # p value threshold for counting Differential Expression points
+#                    useNETcolors=TRUE,           # use module colors saved to ANOVAout, if available; otherwise specify downColor upColor, and NCcolor
+#                    downColor="royalblue",       # significant points above/beyond thresholds on the upper left are this color if useNETcolors=FALSE
+#                    upColor="red",               # significant points above/beyond thresholds on the upper right are this color if useNETcolors=FALSE
+#                    NCcolor="grey",              # points not significant are this color if useNETcolors=FALSE
+#                    splitColors=FALSE,           # create a separate volcano plot(s) for each color in an outputfigs/splitVolcanoes subfolder (folder created if it does not exist)
+#                    highlightGeneProducts=c(),   # c("APP|P05067","MAPT|P10636","APOE|P02649") ; a list of uniqueID rownames to highlight as larger gold points. If symbolsOnly=TRUE, this can be a list of symbols, like c("APP","SMOC1","MAPT")
+#                    symbolsOnly=FALSE,           # for mouse-over HTML plots and the above highlight callouts, consider only displaying and using official gene symbol from first part of UniqueID rownames of ANOVAout.
+#                    HTMLout=TRUE,                # output interactive HTML copies that can be opened in browser. Requires plotly package.
+#                    outFilePrefix="4",           # typically "4", or step # in pipeline being run
+#                    outFileSuffix=FileBaseName,  # A description of the project, used as a filename suffix
+#                    outputfigs=getwd(),          # "drive:/folder/to/location" to save output PDFs and possible HTML files
                     env=.GlobalEnv) {
 
 ############################
@@ -171,19 +194,46 @@ require(ggplot2,quietly=TRUE)
 numberOfNonComparisonColumns=length(colnames(ANOVAout)) - length(which(grepl("diff ",colnames(ANOVAout))))*2
 numComp <- (length(colnames(ANOVAout)) - numberOfNonComparisonColumns) / 2 # of columns separating comparisons from matched column of log2(diffs), i.e. # of comparisons
 
+if (!exists("selectComps")) { cat("- No comparison p value columns selected in selectComps. Using ALL comparisons.\n"); selectComps="ALL"; }
+if (selectComps[1]=="ALL" | selectComps[1]=="all" | selectComps[1]=="All") selectComps=c(3:(numComp+2))
+selectComps=as.integer(selectComps)
+if (max(selectComps)>numComp+2 | min(selectComps)<3) stop("selectComps must be set to 'all' or valid integer p value column indexes of ANOVAout.\n       You have selected a non-p value containing column.")
+
+if(!exists("flip")) { cat("- No comparisons selected for flipping numerator and denominator. Variable flip=c().\n"); flip=c(); }
 # What columns (column numbers) of ANOVAout (T-test or Tukey p values) do we plot volcanoes for? 
-testIndexMasterList <- if (selectComps[1]=="ALL" | selectComps[1]=="all" | selectComps[1]=="All") { c(3:(numComp+2)) } else { if(max(as.numeric(selectComps))<numComp+3) { as.integer(selectComps) } else { stop("selectComps must be set to 'all' or valid integer column indexes of ANOVAout.") }}
+testIndexMasterList <- selectComps
+
+if (!exists("FCmin")) { cat("- No minimum fold change set in FCmin. Using 0 minimum change.\n"); FCmin=0; }
+
 # log2(1) means NO change minimum to be counted in the volcano bookends; log2(1.25) for 25% FC min.
 cutoff <- log2(1+FCmin)
 # p value cutoff for Volcano significant hit counting; dashed line at -log10(sigCutoff)
+if (!exists("signifP")) { cat("- No minimum significant p value threshold specified. Using signifP < 0.05.\n"); signifP=0.05; }
 sigCutoff <- signifP
 
+if (!exists("useNETcolors")) { if ("NETcolors" %in% colnames(ANOVAout)) { cat("- useNETcolors not set. NETcolors found in ANOVAout, so we will color points accordingly.\n"); useNETcolors=TRUE; } else { cat("- useNETcolors not set or not TRUE/FALSE. NETcolors not found in ANOVAout, so 3 color volcano(es) will be drawn.\n"); useNETcolors=FALSE; }}
+if (!is.logical(useNETcolors)) { if ("NETcolors" %in% colnames(ANOVAout)) { cat("- useNETcolors not TRUE/FALSE. NETcolors found in ANOVAout, so we will color points accordingly.\n"); useNETcolors=TRUE; } else { cat("- useNETcolors not TRUE/FALSE. NETcolors not found in ANOVAout, so 3 color volcano(es) will be drawn.\n"); useNETcolors=FALSE; }}
+
+if (!exists("downColor")) downColor="royalblue"
+if (!exists("upColor")) upColor="red"
+if (!exists("NCcolor")) NCcolor="grey"
+
+if (!exists("splitColors")) splitColors=FALSE
+if (!exists("symbolsOnly")) symbolsOnly=FALSE
+if (!exists("HTMLout")) HTMLout=TRUE
+  if (!exists("outFilePrefix")) { outFilePrefix="" } else { outFilePrefix=paste0(outFilePrefix,".") }
+  if (!exists("outFileSuffix")) { if (exists("FileBaseName")) { outFileSuffix=paste0("-",FileBaseName) } else { outFileSuffix="-unspecified_study" }}
+if (!exists("outputfigs")) { cat(paste0("- Variable outputfigs not specified. Saving volcano plots to ",getwd()," .\n")); outputfigs=getwd(); }
+if (!dir.exists(outputfigs)) { cat(paste0("- Directory ",outputfigs," not found. Attempting to create it.\n")); dir.create(outputfigs); }
+
 # Gene products to highlight
+if (!exists("highlightGeneProducts")) highlightGeneProducts=c()
 BIGspots <- highlightGeneProducts
 
 cutoff=log2(1+FCmin)
 # shows what your cutoff for log2(FC) calculates as
-print(paste0("...Applying a ", FCmin*100,"% minimum fold change threshold at + and - x=", signif(cutoff,2)," ..."))
+cat(paste0("\n...Thresholds:\n   [x] Applying a ", FCmin*100,"% minimum fold change threshold at + and - x=", signif(cutoff,2)," .\n"))
+cat(paste0("   [y] with minimum significance cutoff p < ", sigCutoff,", equivalent to -log10(p) y=", round(-log10(sigCutoff),2)," .\n\n"))
 
 
 n <- nrow(ANOVAout)
