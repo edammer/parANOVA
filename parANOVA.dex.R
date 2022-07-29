@@ -46,7 +46,7 @@ parANOVA.dex <- function(dummyVar="",
   if (!exists("NETcolors")) if(exists("net")) { if ("colors" %in% names(net)) { NETcolors=net$colors } else { NETcolors=c() } } else { NETcolors=c() }
   if (!length(NETcolors)==nrow(cleanDat)) { cat("- Network color assignment vector not supplied or not of length in rows of cleanDat; will not be included in output table and data frame.\n") }
   if (!exists("twoGroupCorrMethod")) { cat("- twoGroupCorrMethod variable not set to a correction method for p.adjust when only 2 groups of samples specified in Grouping. Using Benjamini Hochberg 'BH' FDR.\n"); twoGroupCorrMethod="BH"; }
-  if (!exists("outputCSV")) outputCSV=TRUE
+  if (!exists("outputCSV") | !is.logical("outputCSV")) outputCSV=TRUE
   if (!exists("outFilePrefix")) { outFilePrefix="" } else { if (nchar(outFilePrefix)>0) outFilePrefix=paste0(outFilePrefix,".") }
   if (!exists("outFileSuffix")) { if (exists("FileBaseName")) { outFileSuffix=paste0("-",FileBaseName) } else { outFileSuffix="-unspecified_study" }} else { if (nchar(outFileSuffix)>0) outFileSuffix=paste0("-",outFileSuffix) }
   if (!exists("fallbackIfSmallTukeyP")) { cat("- fallbackIfSmallTukeyP variable not set. Using recommended Bonferroni t-test FDR for unreliable Tukey p values <1e-10.\n"); fallbackIfSmallTukeyP=TRUE; }
@@ -698,4 +698,4 @@ dev.off()
 #-0.2  @ 23 modules
 #0.09 / 70
 
-#0.05 to the rigt (tested @ 23 modules)
+#0.05 to the right (tested @ 23 modules)
