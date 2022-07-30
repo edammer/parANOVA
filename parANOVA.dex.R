@@ -494,7 +494,7 @@ for (testIndex in testIndexMasterList) {
 }
 
 } #end if (HTMLout)
-
+cat("\n")
 
 ## These variables may be referenced by dependent, downstream pipeline functions like GOparallel, or stackedDEXbar, following creation of ANOVAout data frame and volcanoes, propagating selections.
 assign("numComp",numComp, envir=.GlobalEnv)
