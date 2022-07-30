@@ -46,7 +46,7 @@ parANOVA.dex <- function(dummyVar="",
   if (!exists("NETcolors")) if(exists("net")) { if ("colors" %in% names(net)) { NETcolors=net$colors } else { NETcolors=c() } } else { NETcolors=c() }
   if (!length(NETcolors)==nrow(cleanDat)) { cat("- Network color assignment vector not supplied or not of length in rows of cleanDat; will not be included in output table and data frame.\n") }
   if (!exists("twoGroupCorrMethod")) { cat("- twoGroupCorrMethod variable not set to a correction method for p.adjust when only 2 groups of samples specified in Grouping. Using Benjamini Hochberg 'BH' FDR.\n"); twoGroupCorrMethod="BH"; }
-  if (!exists("outputCSV") | !is.logical("outputCSV")) outputCSV=TRUE
+  if (!exists("outputCSV") | !is.logical(outputCSV)) outputCSV=TRUE
   if (!exists("outFilePrefix")) { outFilePrefix="" } else { if (nchar(outFilePrefix)>0) outFilePrefix=paste0(outFilePrefix,".") }
   if (!exists("outFileSuffix")) { if (exists("FileBaseName")) { outFileSuffix=paste0("-",FileBaseName) } else { outFileSuffix="-unspecified_study" }} else { if (nchar(outFileSuffix)>0) outFileSuffix=paste0("-",outFileSuffix) }
   if (!exists("fallbackIfSmallTukeyP")) { cat("- fallbackIfSmallTukeyP variable not set. Using recommended Bonferroni t-test FDR for unreliable Tukey p values <1e-10.\n"); fallbackIfSmallTukeyP=TRUE; }
@@ -55,7 +55,7 @@ parANOVA.dex <- function(dummyVar="",
 ## Set up parallel backend as a local cluster using n (parallelThreads) CPU threads (in the .GlobalEnv outside of this function!)
   require(doParallel, quietly=TRUE)
   require(parallel, quietly=TRUE)
-  if(exists("clusterLocal")) stopCluster(clusterLocal) #in case already started.
+  # if(exists("clusterLocal")) stopCluster(clusterLocal) #in case already started.
   clusterLocal <- makeCluster(c(rep("localhost",parallelThreads)),type="SOCK")
   registerDoParallel(clusterLocal)
 
@@ -162,7 +162,7 @@ helperfn <- function(xx) {
 ## requires ggplot2, plotly packages.
 ##
 
-plotVolc<- function(ANOVAout=ANOVAout,
+plotVolc<- function(dummyVar="",
 ## All parameters are set as variables of the global environment, or if not set, fallback to defaults in the function.
 #                    FCmin=0,                     # 0.25 for 25%, 0 for no threshold (vertical minimum FC threshold dashed lines)
 #                    selectComps=selectComps,     # "ALL" for volcano output(s) on all pairwise comparisons in ANOVAout
@@ -187,6 +187,9 @@ plotVolc<- function(ANOVAout=ANOVAout,
 
 require(ggplot2,quietly=TRUE)
 
+if (!exists("ANOVAout")) if (!length(dummyVar)==1) { cat("- ANOVAout not in memory, using input provided to this function.\n"); ANOVAout=as.data.frame(dummyVar); } else { stop("Variable ANOVAout not found or no input was provided.\nPlease run parANOVA.dex() function first, and save output to ANOVAout variable or pass its output to this function.\n\n") }
+if (!ncol(ANOVAout)>3) stop("- Input or ANOVAout variable contents are not a data (frame) with at least 4 columns. It is not valid output from the parANOVA.dex() function.\n  Please run parANOVA.dex() first.\n\n")
+
 numberOfNonComparisonColumns=length(colnames(ANOVAout)) - length(which(grepl("diff ",colnames(ANOVAout))))*2
 numComp <- (length(colnames(ANOVAout)) - numberOfNonComparisonColumns) / 2 # of columns separating comparisons from matched column of log2(diffs), i.e. # of comparisons
 
@@ -209,6 +212,20 @@ sigCutoff <- signifP
 
 if (!exists("useNETcolors")) { if ("NETcolors" %in% colnames(ANOVAout)) { cat("- useNETcolors not set. NETcolors found in ANOVAout, so we will color points accordingly.\n"); useNETcolors=TRUE; } else { cat("- useNETcolors not set or not TRUE/FALSE. NETcolors not found in ANOVAout, so 3 color volcano(es) will be drawn.\n"); useNETcolors=FALSE; }}
 if (!is.logical(useNETcolors)) { if ("NETcolors" %in% colnames(ANOVAout)) { cat("- useNETcolors not TRUE/FALSE. NETcolors found in ANOVAout, so we will color points accordingly.\n"); useNETcolors=TRUE; } else { cat("- useNETcolors not TRUE/FALSE. NETcolors not found in ANOVAout, so 3 color volcano(es) will be drawn.\n"); useNETcolors=FALSE; }}
+
+if (!exists("NETcolors") & useNETcolors) {
+  if ("NETcolors" %in% colnames(ANOVAout)) {
+    cat("- NETcolors variable not set. But, NETcolors was found in the input ANOVA table. Using this.\n")
+    NETcolors=ANOVAout$NETcolors
+  } else {
+    if ("colors" %in% names(net)) {
+      cat("- NETcolors found as net$colors. Using this.\n")
+      NETcolors=net$colors
+    } else {
+      stop("\nYou specified to use NETcolors, but I could not find a 'NETcolors' column in ANOVAout or the colors slot of the WGCNA::blockwiseModules() output 'net' list.\n\n")
+    }
+  }
+}
 
 if (!exists("downColor")) downColor="royalblue"
 if (!exists("upColor")) upColor="red"
@@ -261,7 +278,7 @@ iter <- length(testIndexMasterList) + 1
 for (testIndex in testIndexMasterList) {
   iter <- iter - 1
   df <- eval(parse(text = "dexComps[[comparisonIDs$dfVariable[iter]]]"))
-  print(paste0("Processing ANOVA column ", testIndex, " (", comparisonIDs$Comparison[iter], ") for volcano..."))
+  cat(paste0("\rProcessing ANOVA column ", testIndex, " (", comparisonIDs$Comparison[iter], ") for volcano ...   "))
 
   # correct 0 Tukey pValues to ANOVA p (in column 2); it's better than taking -log10 of 0 in the next step
   if (length(which(df[, testIndex] == 0))>0) print(paste0("Found ",length(which(df[, testIndex] == 0))," p=0 values for this comparison! Substituted -log10(p) using one-way ANOVA overall p value (Consider fallback=TRUE in ANOVAout calculation.)"))
@@ -293,6 +310,7 @@ for (testIndex in testIndexMasterList) {
   
   ## Color Interesting Gene Product Spots DIFFERENTLY as 4th color if doing blue/red/green (no module colors) -- (4=gold1 below)
   if(useNETcolors) { 
+    if(!"NETcolors" %in% colnames(df)) df$NETcolors <- NETcolors
     df$color1<-df$NETcolors
     df$threshold2 <- as.numeric(df$threshold1)
     df$threshold2[match(intersect(df$Symbol, BIGspots), df$Symbol)] <- 4 
@@ -430,12 +448,13 @@ for (testIndex in testIndexMasterList) {
 
 
 ## Write Files
-if(splitColors) { dir.create(file.path(outputfigs, "/SplitVolcano/")) }
+if(splitColors) { cat("\n- Creating SplitVolcano folder for all output files...\n"); dir.create(file.path(outputfigs, "/SplitVolcano/")); }
 
 # Print to PDFs, one per color (per comparison, if multiple)
 iter <- length(testIndexMasterList) + 1
 for (testIndex in testIndexMasterList) {
   iter <- iter - 1
+  cat(paste0("\rGenerating PDF volcano for ANOVAout column ", testIndex, " (", comparisonIDs$Comparison[iter], ") ...   "))
   for (eachColor in eachColorSplit) {
     list_element <- paste(comparisonIDs$dfVariable[iter], eachColor, sep = ".")
     df.oneColor <- dfListModColors[[list_element]]
@@ -460,6 +479,7 @@ suppressPackageStartupMessages(require(plotly, quietly=TRUE))
 iter <- length(testIndexMasterList) + 1
 for (testIndex in testIndexMasterList) {
   iter <- iter - 1
+  cat(paste0("\rGenerating HTML volcano for ANOVAout column ", testIndex, " (", comparisonIDs$Comparison[iter], ") ...   "))
   for (eachColor in eachColorSplit) {
     list_element <- paste(comparisonIDs$dfVariable[iter], eachColor, sep = ".")
     df.oneColor <- dfListModColors[[list_element]]
@@ -499,7 +519,7 @@ assign("sigVolcCutoff",sigCutoff, envir=.GlobalEnv)
 ## ...requires ANOVAout prior creation, and net$MEs and net$colors (latter 2 are blockwiseModules WGCNA function output to slots in the list 'net')
 ##
 
-DEXpercentStacked <- function(ANOVAout=ANOVAout,
+DEXpercentStacked <- function(dummyVar="",
 ## All parameters are set as variables of the global environment, or if not set, fallback to defaults in the function.
 #                    selectComps=testIndexMasterList,     # can be set to "ALL" for all pairwise comparisons in ANOVAout, or column indices of ANOVAout where p values of pairwise comparisons are stored.
 #                                                 # Defaults to the columns selected for volcanoes.   
@@ -520,10 +540,29 @@ suppressPackageStartupMessages(require(ggplot2,quietly=TRUE))
 #suppressPackageStartupMessages(require(Cairo,quietly=TRUE))
 suppressPackageStartupMessages(require(WGCNA,quietly=TRUE))
 
+
+if (!exists("ANOVAout")) if (!length(dummyVar)==1) { cat("- ANOVAout not in memory, using input provided to this function.\n"); ANOVAout=as.data.frame(dummyVar); } else { stop("Variable ANOVAout not found or no input was provided.\nPlease run parANOVA.dex() function first, and save output to ANOVAout variable or pass its output to this function.\n\n") }
+if (!ncol(ANOVAout)>3) stop("\nInput or ANOVAout variable contents are not a data (frame) with at least 4 columns. It is not valid output from the parANOVA.dex() function.\n  Please run parANOVA.dex() first.\n\n")
+
 numberOfNonComparisonColumns=length(colnames(ANOVAout)) - length(which(grepl("diff ",colnames(ANOVAout))))*2
 numComp <- (length(colnames(ANOVAout)) - numberOfNonComparisonColumns) / 2 # of columns separating comparisons from matched column of log2(diffs), i.e. # of comparisons
 
-if(exists("testIndexMasterList")) selectComps=testIndexMasterList
+if (!exists("NETcolors")) {
+  if ("NETcolors" %in% colnames(ANOVAout)) {
+    cat("- NETcolors variable not set. But, NETcolors was found in the input ANOVA table. Using this.\n")
+    NETcolors=ANOVAout$NETcolors
+  } else {
+    if ("colors" %in% names(net)) {
+      cat("- NETcolors found in net$colors...\n")
+      NETcolors=net$colors
+    } else {
+      stop("\nI could not find a 'NETcolors' column in ANOVAout nor did I find a 'colors' slot of the WGCNA::blockwiseModules() output 'net' list.\nThis function only works if gene products in cleanDat have been clustered into modules.\n\n")
+    }
+  }
+}
+if (!length(NETcolors)==nrow(ANOVAout)) { stop("\nNETcolors vector length does not match number of rows in the input ANOVA table.\n"); }
+if(!"NETcolors" %in% colnames(ANOVAout)) ANOVAout$NETcolors <- NETcolors
+if(exists("testIndexMasterList")) { cat("- Found plotVolc function output variable testIndexMasterList to recall comparisons selected for selectComps. Using the following comparisons:\n"); print(data.frame('Comparisons'=colnames(ANOVAout)[testIndexMasterList])); selectComps=testIndexMasterList; }
 if (!exists("selectComps")) { cat("- No comparison p value columns selected in selectComps. Using ALL comparisons.\n"); selectComps="ALL"; }
 if (selectComps[1]=="ALL" | selectComps[1]=="all" | selectComps[1]=="All") selectComps=c(3:(numComp+2))
 selectComps=as.integer(selectComps)
@@ -634,8 +673,8 @@ colvecwb<-wb(100)
 colvecwr<-wr(100)
 maxDN<-max( c(maxDN, max(abs(downTargetAvg),na.rm=T)) )
 maxUP<-max( c(maxUP, max(upTargetAvg,na.rm=T)) )
-print(paste0(round(maxDN,2)," - max down average log2"))
-print(paste0(round(maxUP,2)," + max up average log2"))
+cat(paste0("\rAvg. log2(FC) DEx range: -",round(maxDN,2)," to +",round(maxUP,2)," ..."))
+
 vecDN<- -sapply(1:nrow(orderedLabelsByRelatedness),function(x) round( as.numeric(orderedLabelsByRelatedness[x,"downTargetAvg"])/maxDN*100, 0 ))
 vecUP<-sapply(1:nrow(orderedLabelsByRelatedness),function(x) round( as.numeric(orderedLabelsByRelatedness[x,"upTargetAvg"])/maxUP*100, 0 ))
 vecOTHER<-sapply(1:nrow(orderedLabelsByRelatedness),function(x) round( as.numeric(orderedLabelsByRelatedness[x,"otherTargetAvg"])*0, 0 )) #*0 insures these will be white.
@@ -659,6 +698,7 @@ dexCompsStacks[[comparisonIDs$dfVariable[z]]] <- meltPlotMANUAL2
 # note: yscaleMax never needs to be >1
 
 ## Plot stacked bars and use common color scale for all plots of pairwise comparison DEP fractions' average log2FC
+cat("\n\n- Generating PDF file(s)...\n")
 suppressPackageStartupMessages(require(scales,quietly=TRUE))
 
 colorData=data.frame(Mnum=as.character(unique(dexCompsStacks[[comparisonIDs$dfVariable[z]]]$Mnum)),yBlank=c(0), fill=gplots::col2hex(unique(WGCNA::labels2colors(as.numeric(gsub("M","",as.character(unique(dexCompsStacks[[comparisonIDs$dfVariable[z]]]$Mnum))))))), fillName=unique(WGCNA::labels2colors(as.numeric(gsub("M","",as.character(unique(dexCompsStacks[[comparisonIDs$dfVariable[z]]]$Mnum)))))))
