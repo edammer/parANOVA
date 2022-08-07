@@ -175,6 +175,8 @@ plotVolc<- function(dummyVar="",
 #                    splitColors=FALSE,           # create a separate volcano plot(s) for each color in an outputfigs/splitVolcanoes subfolder (folder created if it does not exist)
 #                    highlightGeneProducts=c(),   # c("APP|P05067","MAPT|P10636","APOE|P02649") ; a list of uniqueID rownames to highlight as larger gold points. If symbolsOnly=TRUE, this can be a list of symbols, like c("APP","SMOC1","MAPT")
 #                    symbolsOnly=FALSE,           # for mouse-over HTML plots and the above highlight callouts, consider only displaying and using official gene symbol from first part of UniqueID rownames of ANOVAout.
+#                    labelTop=0,                  # maximum p below which to label all points in the PDF output; OR an integer number of top ranked most significant points to label
+#                    sameScale=FALSE,             # When multiple plots are drawn, should they all be the same scale with min and max x and y ranges?
 #                    HTMLout=TRUE,                # output interactive HTML copies that can be opened in browser. Requires plotly package.
 #                    outFilePrefix="4",           # typically "4", or step # in pipeline being run
 #                    outFileSuffix=FileBaseName,  # A description of the project, used as a filename suffix
@@ -273,6 +275,7 @@ pointColorsVectorListForPlots <- list()
 volcListModColorsWeb <- list()
 volcListModColors <- list()
 dfListModColors <- list()
+xRange<-yRange <- list()
 
 iter <- length(testIndexMasterList) + 1
 for (testIndex in testIndexMasterList) {
@@ -290,16 +293,14 @@ for (testIndex in testIndexMasterList) {
   
   df$negLogP <- -log10(as.numeric(df[, testIndex]))
   
-  df$threshold1 <- as.numeric(rep(0, n))
-  ## Any COMPARISON SIGNIFICANT (uses ANOVA p in column 2 of df instead of Tukey p): # for (i in 1:n) { if (abs(as.numeric(df[i,testIndex+numComp]))<cutoff | df[i,2]>sigCutoff ) {df$threshold1[i]=3} else { if (df[i,testIndex+numComp]<cutoff) {df$threshold1[i]=2} else {df$threshold1[i]=1}} }
+  df$threshold1 <- as.numeric(rep(3, n))
+  ## Significance (y) and x Threshold categorization of each gene product
   for (i in 1:n) {
-    if (abs(as.numeric(df[i, testIndex + numComp])) < cutoff | as.numeric(df[i, testIndex]) > sigCutoff) {
-      df$threshold1[i] <- 3
+    if (as.numeric(df[i, testIndex + numComp]) > cutoff & as.numeric(df[i, testIndex]) < sigCutoff) {
+      df$threshold1[i] <- 1
     } else {
-      if (as.numeric(df[i, testIndex + numComp]) < cutoff) {
+      if (as.numeric(df[i, testIndex + numComp]) < -cutoff & as.numeric(df[i, testIndex]) < sigCutoff) {
         df$threshold1[i] <- 2
-      } else {
-        df$threshold1[i] <- 1
       }
     }
   }
@@ -315,9 +316,9 @@ for (testIndex in testIndexMasterList) {
     df$threshold2 <- as.numeric(df$threshold1)
     df$threshold2[match(intersect(df$Symbol, BIGspots), df$Symbol)] <- 4 
   } else {
-    df$color1 <- as.numeric(df$threshold1)
+    df$color1 <- as.numeric(as.character(df$threshold1))
     df$color1[match(intersect(df$Symbol, BIGspots), df$Symbol)] <- 4
-    df$threshold2 <- as.numeric(df$threshold1)
+    df$threshold2 <- as.numeric(as.character(df$threshold1))
     df$threshold2[match(intersect(df$Symbol, BIGspots), df$Symbol)] <- 4 
   }
   df$color1 <- as.factor(df$color1)
@@ -335,7 +336,7 @@ for (testIndex in testIndexMasterList) {
     df$color2<-as.character(df$color1)
     df$color2[df$threshold2 == 4] <- "gold1" #for BIGspots
   } else {
-    df$color2 <- as.numeric(df$color1)
+    df$color2 <- as.numeric(as.character(df$color1))
     df$color2[df$color2 == 1] <- upColor
     df$color2[df$color2 == 2] <- downColor
     df$color2[df$color2 == 3] <- NCcolor
@@ -354,7 +355,7 @@ for (testIndex in testIndexMasterList) {
 
   df <- df[order(df$size1, decreasing = FALSE), ] # puts larger dots on top (at bottom of df)
   
-  
+
   #splitColors TRUE/FALSE: make one volcano with all colors (FALSE), or make volcanoes for each color (TRUE)
   # SPLIT DATA FRAME FOR VOLCANO PLOT BY COLORS (if multiple eachColorSplit items)
   df.AllColors <- df
@@ -391,8 +392,8 @@ for (testIndex in testIndexMasterList) {
       # geom_text(aes(0,1.30103,label = 1.30103, vjust = -1))+
       geom_vline(xintercept = cutoff, linetype = "dashed", color = "black", size = 1.2) +
       geom_vline(xintercept = -cutoff, linetype = "dashed", color = "black", size = 1.2) +
-      annotate("text", x = min(as.numeric(df.oneColor[, testIndex + numComp])) / 2, y = max(df.oneColor$negLogP) * .95, size = 5, label = paste0("Downregulated: ", bquote(.(length(which(as.numeric(df.oneColor$threshold1) == 2)))))) +
-      annotate("text", x = max(as.numeric(df.oneColor[, testIndex + numComp])) / 2, y = max(df.oneColor$negLogP) * .95, size = 5, label = paste0("Upregulated: ", bquote(.(length(which(as.numeric(df.oneColor$threshold1) == 1)))))) +
+      annotate("text", x = min(as.numeric(df.oneColor[, testIndex + numComp])) / 2, y = max(df.oneColor$negLogP) * .95, size = 5, label = paste0("Downregulated: ", bquote(.(length(which(as.numeric(as.character(df.oneColor$threshold1)) == 2)))))) +
+      annotate("text", x = max(as.numeric(df.oneColor[, testIndex + numComp])) / 2, y = max(df.oneColor$negLogP) * .95, size = 5, label = paste0("Upregulated: ", bquote(.(length(which(as.numeric(as.character(df.oneColor$threshold1)) == 1)))))) +
       
       theme(
         # axis.text = element_text(size = 14),
@@ -405,14 +406,39 @@ for (testIndex in testIndexMasterList) {
       )
     
     
-    # web version doesn't use as.expression! plotly fails with those, so we rebuild the volcano for the web.
-    volcanoweb <- ggplot(data = df.oneColor, aes(x = xdata, y = negLogP, color = color1, text = Symbol)) +
+    # web version doesn't use as.expression! plotly fails with those, so we rebuild the volcano for the web; we end up using this version for both PDF and HTML.
+    if(!exists("labelTop")) labelTopX=0
+    if(labelTop>0) {
+      if(labelTop<1) { finalLabelCount=length(which(df.oneColor$negLogP>= -log10(labelTop))) } else { finalLabelCount=as.integer(labelTop) }
+      df.oneColor$label=rep("",length(df.oneColor$Symbol))
+      df.oneColor$label[order(df.oneColor$negLogP,decreasing=TRUE)[1:finalLabelCount]] <- df.oneColor$Symbol[order(df.oneColor$negLogP,decreasing=TRUE)[1:finalLabelCount]]
+      require(ggrepel,quietly=TRUE)
+    }
+
+    if(!exists("sameScale")) sameScale=FALSE
+    if(sameScale) {
+      ANOVAout.all.negLogP<-t(apply(ANOVAout,1,function(x) { y=x[testIndexMasterList]; y[which(y==0)] <- x[2]; -log10(y); }))
+      yRange[[list_element]]=c(0,max(ANOVAout.all.negLogP))
+      ANOVAout.all.log2FC<-ANOVAout[,testIndexMasterList+numComp]
+      if(length(flip)>0) for (column in flip) ANOVAout.all.log2FC[,column-2] = ANOVAout.all.log2FC[,column-2]*(-1)
+      xRange[[list_element]]=range(ANOVAout.all.log2FC)
+    } else {
+      xRange[[list_element]]=c(min(as.numeric(df.oneColor[, testIndex + numComp])), max(as.numeric(df.oneColor[, testIndex + numComp])))
+      yRange[[list_element]]=c(0, max(df.oneColor$negLogP))
+    }
+
+    if(labelTop>0) {
+      volcanoweb <- ggplot(data = df.oneColor, aes(x = xdata, y = negLogP, color = color1, text = Symbol, label = label))
+    } else {
+      volcanoweb <- ggplot(data = df.oneColor, aes(x = xdata, y = negLogP, color = color1, text = Symbol))
+    }
+    volcanoweb <- volcanoweb +
       scale_colour_manual(values = unique(data.frame(col1 = df.oneColor$color1, col2 = df.oneColor$color2))[order(unique(data.frame(col1 = df.oneColor$color1, col2 = df.oneColor$color2))[, 1]), 2]) + # THIS COLOR(S) IS LOOKED UP ACTIVELY BY PLOTLY IN THE VARIABLE, SO WE'VE USED A LIST ELEMENT THAT IS NEVER CHANGED
       # scale_y_continuous(breaks = seq(0, 8, by = 1))+
       # geom_point(aes(fill=pointColorsVectorListForPlots[[list_element]][,"color2"]), alpha=0.66, size=pointColorsVectorListForPlots[[list_element]]$size, pch=16, color=pointColorsVectorListForPlots[[list_element]][,"color3"]) + #pch=pointColorsVectorListForPlots[[list_element]][,"pch"] not using variable symbol types (21 for outlined circle only)
       geom_point(alpha = 0.66, size = pointColorsVectorListForPlots[[list_element]]$size, pch = 16) + # pch=pointColorsVectorListForPlots[[list_element]][,"pch"] just uses the higher pch code in the web render.
       theme(legend.position = "none") +
-      xlim(c(min(as.numeric(df.oneColor[, testIndex + numComp])), max(as.numeric(df.oneColor[, testIndex + numComp])))) + ylim(c(0, max(df.oneColor$negLogP))) +
+      xlim(xRange[[list_element]]) + ylim(yRange[[list_element]]) +
       xlab(paste0("Difference, log2 ", comparisonIDs$Comparison[iter])) +
       ylab(paste0("-log10 p value")) +
       theme(axis.title.x = element_text(size = rel(1.8), angle = 00)) +
@@ -422,8 +448,8 @@ for (testIndex in testIndexMasterList) {
       # geom_text(aes(0,1.30103,label = 1.30103, vjust = -1))+
       geom_vline(xintercept = cutoff, linetype = "dashed", color = "black", size = 1.2) +
       geom_vline(xintercept = -cutoff, linetype = "dashed", color = "black", size = 1.2) +
-      annotate("text", x = min(as.numeric(df.oneColor[, testIndex + numComp])) / 2, y = max(df.oneColor$negLogP) * .95, size = 5, label = paste0("Downregulated: ", bquote(.(length(which(as.numeric(df.oneColor$threshold1) == 2)))))) +
-      annotate("text", x = max(as.numeric(df.oneColor[, testIndex + numComp])) / 2, y = max(df.oneColor$negLogP) * .95, size = 5, label = paste0("Upregulated: ", bquote(.(length(which(as.numeric(df.oneColor$threshold1) == 1)))))) +
+      annotate("text", x = min(xRange[[list_element]]) / 2, y = max(yRange[[list_element]]) * .95, size = 5, label = paste0("Downregulated: ", bquote(.(length(which(as.numeric(df.oneColor$threshold1) == 2)))))) +
+      annotate("text", x = max(xRange[[list_element]]) / 2, y = max(yRange[[list_element]]) * .95, size = 5, label = paste0("Upregulated: ", bquote(.(length(which(as.numeric(df.oneColor$threshold1) == 1)))))) +
       
       theme(
         # axis.text = element_text(size = 14),
@@ -435,7 +461,10 @@ for (testIndex in testIndexMasterList) {
         panel.background = element_rect(fill = "white")
       )
     
-    
+    if(labelTop>0) {
+      volcanoweb <- volcanoweb + geom_label_repel(box.padding = 0.5,label.size=NA)
+    }
+
     volcListModColors[[list_element]] <- volcano1
     volcListModColorsWeb[[list_element]] <- volcanoweb
     
