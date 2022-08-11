@@ -407,7 +407,7 @@ for (testIndex in testIndexMasterList) {
     
     
     # web version doesn't use as.expression! plotly fails with those, so we rebuild the volcano for the web; we end up using this version for both PDF and HTML.
-    if(!exists("labelTop")) labelTopX=0
+    if(!exists("labelTop")) labelTop=0
     if(labelTop>0) {
       if(labelTop<1) { finalLabelCount=length(which(df.oneColor$negLogP>= -log10(labelTop))) } else { finalLabelCount=as.integer(labelTop) }
       df.oneColor$label=rep("",length(df.oneColor$Symbol))
