@@ -3,7 +3,7 @@ Fast parallel ANOVA+Tukey statistics with 0 fallback option, volcano plot, and m
 
 Compatible with the Seyfried Systems Biology Pipeline.
 
-Sample pipeline input which benefits from fallback p value calculation when unreliable ANOVA+Tukey p values compute to <1e-10 is provided as .RData
+Sample pipeline input which benefits from fallback p value calculation when unreliable ANOVA+Tukey p values compute to <10^-8.5 (-log10(p)>8.5) is provided as .RData
 The fallback is to the Bonferroni FDR on a two-sided unequal variance T test, which approximates the Tukey calculation when significance is higher and p values are smaller.
 
 Outputs of the parANOVA.dex function include a data frame and CSV of one-way ANOVA statistics for overall model and Tukey-corrected p value for each pairwise comparison in the supplied abundance data.
