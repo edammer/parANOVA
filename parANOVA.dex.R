@@ -49,8 +49,8 @@ parANOVA.dex <- function(dummyVar="",
   if (!exists("outputCSV")) { outputCSV=TRUE } else { if(!is.logical(outputCSV)) { outputCSV=TRUE } }
   if (!exists("outFilePrefix")) { outFilePrefix="" } else { if (nchar(outFilePrefix)>0) outFilePrefix=paste0(outFilePrefix,".") }
   if (!exists("outFileSuffix")) { if (exists("FileBaseName")) { outFileSuffix=paste0("-",FileBaseName) } else { outFileSuffix="-unspecified_study" }} else { if (nchar(outFileSuffix)>0) outFileSuffix=paste0("-",outFileSuffix) }
-  if (!exists("fallbackIfSmallTukeyP")) { cat("- fallbackIfSmallTukeyP variable not set. Using recommended Bonferroni t-test FDR for unreliable Tukey p values <1e-8.5\n"); fallbackIfSmallTukeyP=TRUE; }
-  if (!is.logical(fallbackIfSmallTukeyP)) { cat("- fallbackIfSmallTukeyP variable not TRUE/FALSE. Using recommended Bonferroni t-test FDR for unreliable Tukey p values <1e-8.5.\n"); fallbackIfSmallTukeyP=TRUE; }
+  if (!exists("fallbackIfSmallTukeyP")) { cat("- fallbackIfSmallTukeyP variable not set. Using recommended Bonferroni t-test FDR for unreliable Tukey p values <10^-8.5\n"); fallbackIfSmallTukeyP=TRUE; }
+  if (!is.logical(fallbackIfSmallTukeyP)) { cat("- fallbackIfSmallTukeyP variable not TRUE/FALSE. Using recommended Bonferroni t-test FDR for unreliable Tukey p values <10^-8.5.\n"); fallbackIfSmallTukeyP=TRUE; }
 
 ## Set up parallel backend as a local cluster using n (parallelThreads) CPU threads (in the .GlobalEnv outside of this function!)
   require(doParallel, quietly=TRUE)
@@ -92,7 +92,7 @@ parANOVA.dex <- function(dummyVar="",
   ANOVAoutList[[caseSubset]] <- do.call(cbind,resParts)
   ANOVAoutList[[caseSubset]] <- t(ANOVAoutList[[caseSubset]])
   countZeroFallbacks=sum(ANOVAoutList[[caseSubset]][,ncol(ANOVAoutList[[caseSubset]])])
-  if (fallbackIfSmallTukeyP) { cat(paste0("\n...Tukey p<1e-8.5 Fallback calculations using Bonferroni corrected T test: ", countZeroFallbacks, " [",signif(countZeroFallbacks/(nrow(tukresult1)*nrow(ANOVAoutList[[caseSubset]]))*100,2),"%]\n")) } else { cat(paste0(countZeroFallbacks," [",signif(countZeroFallbacks/(nrow(tukresult1)*nrow(ANOVAoutList[[caseSubset]]))*100,2),"%] of all p values are below reliable calculation threshold of 1e-8.5.\nIf you see a ceiling effect in volcanoes, consider setting fallbackIfSmallTukeyP=TRUE.\nNote that volcano fallback for Tukey p=0 will be underestimated (and -log(p) displayed will be overestimated).\n")) }
+  if (fallbackIfSmallTukeyP) { cat(paste0("\n...Tukey p<10^-8.5 Fallback calculations using Bonferroni corrected T test: ", countZeroFallbacks, " [",signif(countZeroFallbacks/(nrow(tukresult1)*nrow(ANOVAoutList[[caseSubset]]))*100,2),"%]\n")) } else { cat(paste0(countZeroFallbacks," [",signif(countZeroFallbacks/(nrow(tukresult1)*nrow(ANOVAoutList[[caseSubset]]))*100,2),"%] of all p values are below reliable calculation threshold of 10^-8.5.\nIf you see a ceiling effect in volcanoes, consider setting fallbackIfSmallTukeyP=TRUE.\nNote that volcano fallback for Tukey p=0 will be underestimated (and -log(p) displayed will be overestimated).\n")) }
   ANOVAoutList[[caseSubset]] <- ANOVAoutList[[caseSubset]][,-ncol(ANOVAoutList[[caseSubset]])]
   ANOVAcols <- as.vector(data.frame(do.call("rbind", strsplit(as.character(line), "[,]"))))
   ANOVAcols <- ANOVAcols[2:length(ANOVAcols)]
@@ -132,9 +132,9 @@ helperfn <- function(xx) {
     tukresult <- data.frame(tuk$SampleType)
     if (!length(rownames(tukresult)) == length(rownames(tukresult1))) tukresult <- tukresult[match(rownames(tukresult1), rownames(tukresult)), ]
     if (fallbackIfSmallTukeyP) {
-      # Fallback to Bonferroni correction of t.test output if Tukey p returned as <1e-8.5 (complex Tukey approximation integral calculation has a ceiling effect or zero value output, beyond 1e-8.5) per https://stackoverflow.com/questions/16470404/tukeyhsd-adjusted-p-value-is-0-0000000
-      zeroFallbacks=length(which(tukresult[,"p.adj"]<1e-8.5))
-      if (zeroFallbacks>0) for (comp in which(tukresult[,"p.adj"]<1e-8.5)) {
+      # Fallback to Bonferroni correction of t.test output if Tukey p returned as <10^-8.5 (complex Tukey approximation integral calculation has a ceiling effect or zero value output, beyond 10^-8.5) per https://stackoverflow.com/questions/16470404/tukeyhsd-adjusted-p-value-is-0-0000000
+      zeroFallbacks=length(which(tukresult[,"p.adj"]<10^-8.5))
+      if (zeroFallbacks>0) for (comp in which(tukresult[,"p.adj"]<10^-8.5)) {
         this.comp=rownames(tukresult)[comp]
         grp1=gsub("^(.*)\\-.*","\\1",this.comp)
         grp2=gsub("^.*\\-(.*)$","\\1",this.comp)
