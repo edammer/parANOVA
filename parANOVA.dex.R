@@ -448,8 +448,8 @@ for (testIndex in testIndexMasterList) {
       # geom_text(aes(0,1.30103,label = 1.30103, vjust = -1))+
       geom_vline(xintercept = cutoff, linetype = "dashed", color = "black", size = 1.2) +
       geom_vline(xintercept = -cutoff, linetype = "dashed", color = "black", size = 1.2) +
-      annotate("text", x = min(xRange[[list_element]]) / 2, y = max(yRange[[list_element]]) * .95, size = 5, label = paste0("Downregulated: ", bquote(.(length(which(as.numeric(df.oneColor$threshold1) == 2)))))) +
-      annotate("text", x = max(xRange[[list_element]]) / 2, y = max(yRange[[list_element]]) * .95, size = 5, label = paste0("Upregulated: ", bquote(.(length(which(as.numeric(df.oneColor$threshold1) == 1)))))) +
+      annotate("text", x = min(xRange[[list_element]]) / 2, y = max(yRange[[list_element]]) * .95, size = 5, label = paste0("Downregulated: ", bquote(.(length(which(as.numeric(as.character(df.oneColor$threshold1)) == 2)))))) +
+      annotate("text", x = max(xRange[[list_element]]) / 2, y = max(yRange[[list_element]]) * .95, size = 5, label = paste0("Upregulated: ", bquote(.(length(which(as.numeric(as.character(df.oneColor$threshold1)) == 1)))))) +
       
       theme(
         # axis.text = element_text(size = 14),
