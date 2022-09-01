@@ -51,7 +51,7 @@ parANOVA.dex <- function(dummyVar="",
   if (!exists("outFileSuffix")) { if (exists("FileBaseName")) { outFileSuffix=paste0("-",FileBaseName) } else { outFileSuffix="-unspecified_study" }} else { if (nchar(outFileSuffix)>0) outFileSuffix=paste0("-",outFileSuffix) }
   if (!exists("fallbackIfSmallTukeyP")) { cat("- fallbackIfSmallTukeyP variable not set. Using recommended Bonferroni t-test FDR for unreliable Tukey p values <10^-8.5\n"); fallbackIfSmallTukeyP=TRUE; }
   if (!is.logical(fallbackIfSmallTukeyP)) { cat("- fallbackIfSmallTukeyP variable not TRUE/FALSE. Using recommended Bonferroni t-test FDR for unreliable Tukey p values <10^-8.5.\n"); fallbackIfSmallTukeyP=TRUE; }
-
+  if (!exists("Tunequal")) { Tunequal=FALSE } else { if(!is.logical(Tunequal)) { Tunequal=TRUE } }
 ## Set up parallel backend as a local cluster using n (parallelThreads) CPU threads (in the .GlobalEnv outside of this function!)
   require(doParallel, quietly=TRUE)
   require(parallel, quietly=TRUE)
@@ -84,22 +84,41 @@ parANOVA.dex <- function(dummyVar="",
 ## Fast parallel code
   dataclipped <- data[, 3:ncol(data)] # as.matrix(as.numeric(data[,3:ncol(data)]))
   SampleType <- as.character(data$SampleType)
-  parallel::clusterExport(cl=clusterLocal, list("SampleType","tukresult1","fallbackIfSmallTukeyP"), envir=environment())  # below helperfn not running in .GlobalEnv
-  parts <- splitIndices(ncol(dataclipped), length(clusterLocal))
-  dataclippedParts <- lapply(parts, function(i) dataclipped[,i,drop=FALSE])
-#  resParts <- parallel::parApply(cl=clusterLocal, dataclippedParts, 2, function(x) {  #parApply call from within function does not parallelize.
-  resParts <- parallel::clusterApply(cl=clusterLocal, dataclippedParts, helperfn)
-  ANOVAoutList[[caseSubset]] <- do.call(cbind,resParts)
-  ANOVAoutList[[caseSubset]] <- t(ANOVAoutList[[caseSubset]])
-  countZeroFallbacks=sum(ANOVAoutList[[caseSubset]][,ncol(ANOVAoutList[[caseSubset]])])
-  if (fallbackIfSmallTukeyP) { cat(paste0("\n...Tukey p<10^-8.5 Fallback calculations using Bonferroni corrected T test: ", countZeroFallbacks, " [",signif(countZeroFallbacks/(nrow(tukresult1)*nrow(ANOVAoutList[[caseSubset]]))*100,2),"%]\n")) } else { cat(paste0(countZeroFallbacks," [",signif(countZeroFallbacks/(nrow(tukresult1)*nrow(ANOVAoutList[[caseSubset]]))*100,2),"%] of all p values are below reliable calculation threshold of 10^-8.5.\nIf you see a ceiling effect in volcanoes, consider setting fallbackIfSmallTukeyP=TRUE.\nNote that volcano fallback for Tukey p=0 will be underestimated (and -log(p) displayed will be overestimated).\n")) }
-  ANOVAoutList[[caseSubset]] <- ANOVAoutList[[caseSubset]][,-ncol(ANOVAoutList[[caseSubset]])]
-  ANOVAcols <- as.vector(data.frame(do.call("rbind", strsplit(as.character(line), "[,]"))))
-  ANOVAcols <- ANOVAcols[2:length(ANOVAcols)]
-  if (length(unique(SampleType))==2) { #for single pairwise comparison, essentially Pr(>F) from ANOVA is equivalent to T-test result (except 1 vs 2 non-NA measurements are allowed)
+  if (!Tunequal) {
+    parallel::clusterExport(cl=clusterLocal, list("SampleType","tukresult1","fallbackIfSmallTukeyP"), envir=environment())  # below helperfn not running in .GlobalEnv
+    parts <- splitIndices(ncol(dataclipped), length(clusterLocal))
+    dataclippedParts <- lapply(parts, function(i) dataclipped[,i,drop=FALSE])
+#    resParts <- parallel::parApply(cl=clusterLocal, dataclippedParts, 2, function(x) {  #parApply call from within function does not parallelize.
+    resParts <- parallel::clusterApply(cl=clusterLocal, dataclippedParts, helperfn)
+    ANOVAoutList[[caseSubset]] <- do.call(cbind,resParts)
+    ANOVAoutList[[caseSubset]] <- t(ANOVAoutList[[caseSubset]])
+    countZeroFallbacks=sum(ANOVAoutList[[caseSubset]][,ncol(ANOVAoutList[[caseSubset]])])
+    if (fallbackIfSmallTukeyP) { cat(paste0("\n...Tukey p<10^-8.5 Fallback calculations using Bonferroni corrected T test: ", countZeroFallbacks, " [",signif(countZeroFallbacks/(nrow(tukresult1)*nrow(ANOVAoutList[[caseSubset]]))*100,2),"%]\n")) } else { cat(paste0(countZeroFallbacks," [",signif(countZeroFallbacks/(nrow(tukresult1)*nrow(ANOVAoutList[[caseSubset]]))*100,2),"%] of all p values are below reliable calculation threshold of 10^-8.5.\nIf you see a ceiling effect in volcanoes, consider setting fallbackIfSmallTukeyP=TRUE.\nNote that volcano fallback for Tukey p=0 will be underestimated (and -log(p) displayed will be overestimated).\n")) }
+    ANOVAoutList[[caseSubset]] <- ANOVAoutList[[caseSubset]][,-ncol(ANOVAoutList[[caseSubset]])]
+    ANOVAcols <- as.vector(data.frame(do.call("rbind", strsplit(as.character(line), "[,]"))))
+    ANOVAcols <- ANOVAcols[2:length(ANOVAcols)]
+  }
+  if (length(unique(SampleType))==2 & !Tunequal) { #for single pairwise comparison, essentially Pr(>F) from ANOVA is equivalent to T-test result (except 1 vs 2 non-NA measurements are allowed)
     ANOVAoutList[[caseSubset]][,3] <- p.adjust(ANOVAoutList[[caseSubset]][,2],method=twoGroupCorrMethod) #get BH FDR for ANOVA/T-test (equivalent) p values
     ANOVAoutList[[caseSubset]][,2:3]<-ANOVAoutList[[caseSubset]][,c(3,2)]
     ANOVAcols[2] <- paste0("FDR (",twoGroupCorrMethod,")")
+  }
+  if (Tunequal) {
+    if (!length(unique(SampleType))==2) {
+      stop("\nNumber of comparison groups is not 2. T test (unequal variance), option Tunequal=TRUE cannot be used!\n\n")
+    } else {
+      parallel::clusterExport(cl=clusterLocal, list("SampleType","tukresult1"), envir=environment())  # below helperfn not running in .GlobalEnv
+      parts <- splitIndices(ncol(dataclipped), length(clusterLocal))
+      dataclippedParts <- lapply(parts, function(i) dataclipped[,i,drop=FALSE])
+      resParts <- parallel::clusterApply(cl=clusterLocal, dataclippedParts, TunequalHelperfn)
+      ANOVAoutList[[caseSubset]] <- do.call(cbind,resParts)
+      ANOVAoutList[[caseSubset]] <- t(ANOVAoutList[[caseSubset]])
+      ANOVAoutList[[caseSubset]][,2] <- p.adjust(ANOVAoutList[[caseSubset]][,3],method=twoGroupCorrMethod) #get BH FDR for ANOVA/T-test (equivalent) p values
+      ANOVAcols <- as.vector(data.frame(do.call("rbind", strsplit(as.character(line), "[,]"))))
+      ANOVAcols <- ANOVAcols[2:length(ANOVAcols)]
+      ANOVAcols[1] <- paste0("Tstatistic")
+      ANOVAcols[2] <- paste0("FDR (",twoGroupCorrMethod,")")
+    }
   }
   colnames(ANOVAoutList[[caseSubset]]) <- ANOVAcols
   ANOVAoutList[[caseSubset]] <- as.data.frame(ANOVAoutList[[caseSubset]])
@@ -150,6 +169,20 @@ helperfn <- function(xx) {
 #  }, chunk.size = round(ncol(dataclipped)/parallelThreads,0)) #end parApply; this failed to parallelize
   } # end function helperfn
 
+
+TunequalHelperfn  <- function(xx) {
+    apply(xx,2,function(x) {
+      x <- data.frame(x = as.double(x), SampleType = SampleType) #as.double(x) instead of x corrects:   Error in lm.fit(x, y,... NA/NaN/Inf in 'y'
+      twoGroups=sort(unique(SampleType))
+      tt <- tryCatch( t.test(as.double(x$x[x$SampleType==twoGroups[1]]),as.double(x$x[x$SampleType==twoGroups[2]]), alternative="two.sided", var.equal=FALSE), error=function(e) data.frame(statistic=0, p.value=1) )
+      log2FC=mean(as.double(x$x[x$SampleType==twoGroups[2]]),na.rm=TRUE) - mean(as.double(x$x[x$SampleType==twoGroups[1]]),na.rm=TRUE)
+      if (is.nan(log2FC)) { log2FC<-NA; tt$statistic[1]<-NA; }
+      c(tt$statistic[1], tt$p.value[1], tt$p.value[1], log2FC)  #second alphabetically sorted group minus first for column 4
+    })  #close apply()
+
+  } # end function TunequalHelperfn
+
+                               
 
 
 
