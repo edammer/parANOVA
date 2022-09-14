@@ -52,6 +52,7 @@ parANOVA.dex <- function(dummyVar="",
   if (!exists("fallbackIfSmallTukeyP")) { cat("- fallbackIfSmallTukeyP variable not set. Using recommended Bonferroni t-test FDR for unreliable Tukey p values <10^-8.5\n"); fallbackIfSmallTukeyP=TRUE; }
   if (!is.logical(fallbackIfSmallTukeyP)) { cat("- fallbackIfSmallTukeyP variable not TRUE/FALSE. Using recommended Bonferroni t-test FDR for unreliable Tukey p values <10^-8.5.\n"); fallbackIfSmallTukeyP=TRUE; }
   if (!exists("Tunequal")) { Tunequal=FALSE } else { if(!is.logical(Tunequal)) { Tunequal=TRUE } }
+
 ## Set up parallel backend as a local cluster using n (parallelThreads) CPU threads (in the .GlobalEnv outside of this function!)
   require(doParallel, quietly=TRUE)
   require(parallel, quietly=TRUE)
@@ -442,9 +443,18 @@ for (testIndex in testIndexMasterList) {
     # web version doesn't use as.expression! plotly fails with those, so we rebuild the volcano for the web; we end up using this version for both PDF and HTML.
     if(!exists("labelTop")) labelTop=0
     if(labelTop>0) {
-      if(labelTop<1) { finalLabelCount=length(which(df.oneColor$negLogP>= -log10(labelTop))) } else { finalLabelCount=as.integer(labelTop) }
+      if(labelTop<1) {
+        finalLabelCountUp=length(which(df.oneColor$negLogP>= -log10(labelTop) & df.oneColor$color2==upColor))
+        finalLabelCountDown=length(which(df.oneColor$negLogP>= -log10(labelTop) & df.oneColor$color2==downColor))
+      } else {
+        finalLabelCount=as.integer(labelTop)
+        finalLabelCountUp= if(length(which(df.oneColor$color2==upColor))<finalLabelCount) { length(which(df.oneColor$color2==upColor)) } else { finalLabelCount }
+        finalLabelCountDown= if(length(which(df.oneColor$color2==downColor))<finalLabelCount) { length(which(df.oneColor$color2==downColor)) } else { finalLabelCount }
+      }
       df.oneColor$label=rep("",length(df.oneColor$Symbol))
-      df.oneColor$label[order(df.oneColor$negLogP,decreasing=TRUE)[1:finalLabelCount]] <- df.oneColor$Symbol[order(df.oneColor$negLogP,decreasing=TRUE)[1:finalLabelCount]]
+      if(finalLabelCountUp>0) df.oneColor$label[intersect(order(df.oneColor$negLogP,decreasing=TRUE), which(df.oneColor$color2==upColor))[1:finalLabelCountUp]] <- df.oneColor$Symbol[intersect(order(df.oneColor$negLogP,decreasing=TRUE), which(df.oneColor$color2==upColor))[1:finalLabelCountUp]]
+      if(finalLabelCountDown>0) df.oneColor$label[intersect(order(df.oneColor$negLogP,decreasing=TRUE), which(df.oneColor$color2==downColor))[1:finalLabelCountDown]] <- df.oneColor$Symbol[intersect(order(df.oneColor$negLogP,decreasing=TRUE), which(df.oneColor$color2==downColor))[1:finalLabelCountDown]]
+
       require(ggrepel,quietly=TRUE)
     }
 
@@ -461,6 +471,7 @@ for (testIndex in testIndexMasterList) {
     }
 
     if(labelTop>0) {
+      options(ggrepel.max.overlaps = Inf)  # Improves compatibility of ggrepel labeling in RStudio.
       volcanoweb <- ggplot(data = df.oneColor, aes(x = xdata, y = negLogP, color = color1, text = Symbol, label = label))
     } else {
       volcanoweb <- ggplot(data = df.oneColor, aes(x = xdata, y = negLogP, color = color1, text = Symbol))
