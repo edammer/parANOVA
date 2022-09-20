@@ -444,23 +444,23 @@ for (testIndex in testIndexMasterList) {
     if(!exists("labelTop")) labelTop=0
     if(labelTop>0) {
       if(labelTop<1) {
-        finalLabelCountUp=length(which(df.oneColor$negLogP>= -log10(labelTop) & df.oneColor$color2==upColor))
-        finalLabelCountDown=length(which(df.oneColor$negLogP>= -log10(labelTop) & df.oneColor$color2==downColor))
+        finalLabelCountUp=length(which(df.oneColor$negLogP>= -log10(labelTop) & df.oneColor$threshold1==1))
+        finalLabelCountDown=length(which(df.oneColor$negLogP>= -log10(labelTop) & df.oneColor$threshold1==2))
       } else {
         finalLabelCount=as.integer(labelTop)
-        finalLabelCountUp= if(length(which(df.oneColor$color2==upColor))<finalLabelCount) { length(which(df.oneColor$color2==upColor)) } else { finalLabelCount }
-        finalLabelCountDown= if(length(which(df.oneColor$color2==downColor))<finalLabelCount) { length(which(df.oneColor$color2==downColor)) } else { finalLabelCount }
+        finalLabelCountUp= if(length(which(df.oneColor$threshold1==1))<finalLabelCount) { length(which(df.oneColor$threshold1==1)) } else { finalLabelCount }
+        finalLabelCountDown= if(length(which(df.oneColor$threshold1==2))<finalLabelCount) { length(which(df.oneColor$threshold1==2)) } else { finalLabelCount }
       }
       df.oneColor$label=rep("",length(df.oneColor$Symbol))
-      if(finalLabelCountUp>0) df.oneColor$label[intersect(order(df.oneColor$negLogP,decreasing=TRUE), which(df.oneColor$color2==upColor))[1:finalLabelCountUp]] <- df.oneColor$Symbol[intersect(order(df.oneColor$negLogP,decreasing=TRUE), which(df.oneColor$color2==upColor))[1:finalLabelCountUp]]
-      if(finalLabelCountDown>0) df.oneColor$label[intersect(order(df.oneColor$negLogP,decreasing=TRUE), which(df.oneColor$color2==downColor))[1:finalLabelCountDown]] <- df.oneColor$Symbol[intersect(order(df.oneColor$negLogP,decreasing=TRUE), which(df.oneColor$color2==downColor))[1:finalLabelCountDown]]
+      if(finalLabelCountUp>0) df.oneColor$label[intersect(order(df.oneColor$negLogP,decreasing=TRUE), which(df.oneColor$threshold1==1))[1:finalLabelCountUp]] <- df.oneColor$Symbol[intersect(order(df.oneColor$negLogP,decreasing=TRUE), which(df.oneColor$threshold1==1))[1:finalLabelCountUp]]
+      if(finalLabelCountDown>0) df.oneColor$label[intersect(order(df.oneColor$negLogP,decreasing=TRUE), which(df.oneColor$threshold1==2))[1:finalLabelCountDown]] <- df.oneColor$Symbol[intersect(order(df.oneColor$negLogP,decreasing=TRUE), which(df.oneColor$threshold1==2))[1:finalLabelCountDown]]
 
       require(ggrepel,quietly=TRUE)
     }
 
     if(!exists("sameScale")) sameScale=FALSE
     if(sameScale) {
-      ANOVAout.all.negLogP<-t(apply(ANOVAout,1,function(x) { y=x[testIndexMasterList]; y[which(y==0)] <- x[2]; -log10(y); }))
+      ANOVAout.all.negLogP<-t(apply(ANOVAout,1,function(x) { y=x[testIndexMasterList]; y[which(y==0)] <- x[2]; -log10(as.numeric(y)); }))
       yRange[[list_element]]=c(0,max(ANOVAout.all.negLogP))
       ANOVAout.all.log2FC<-ANOVAout[,testIndexMasterList+numComp]
       if(length(flip)>0) for (column in flip) ANOVAout.all.log2FC[,column-2] = ANOVAout.all.log2FC[,column-2]*(-1)
