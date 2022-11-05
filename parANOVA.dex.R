@@ -480,7 +480,7 @@ for (testIndex in testIndexMasterList) {
     }
 
     if(labelTop>0 | "label" %in% colnames(df.oneColor)) {
-      options(ggrepel.max.overlaps = 1)  # Improves compatibility of ggrepel labeling in RStudio.
+      options(ggrepel.max.overlaps = Inf)  # Allowing unlimited overlaps improves compatibility of ggrepel labeling in RStudio.
       volcanoweb <- ggplot(data = df.oneColor, aes(x = xdata, y = negLogP, color = color1, text = Symbol, label = label))
     } else {
       volcanoweb <- ggplot(data = df.oneColor, aes(x = xdata, y = negLogP, color = color1, text = Symbol))
