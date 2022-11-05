@@ -208,8 +208,10 @@ plotVolc<- function(dummyVar="",
 #                    NCcolor="grey",              # points not significant are this color if useNETcolors=FALSE
 #                    splitColors=FALSE,           # create a separate volcano plot(s) for each color in an outputfigs/splitVolcanoes subfolder (folder created if it does not exist)
 #                    highlightGeneProducts=c(),   # c("APP|P05067","MAPT|P10636","APOE|P02649") ; a list of uniqueID rownames to highlight as larger gold points. If symbolsOnly=TRUE, this can be a list of symbols, like c("APP","SMOC1","MAPT")
+#                    labelHighlighted=FALSE,      # if true, highlighted spots get text labels with their rownames from ANOVAout
 #                    symbolsOnly=FALSE,           # for mouse-over HTML plots and the above highlight callouts, consider only displaying and using official gene symbol from first part of UniqueID rownames of ANOVAout.
 #                    labelTop=0,                  # maximum p below which to label all points in the PDF output; OR an integer number of top ranked most significant points to label
+#                    labelSize=4.5,               # text label font size, if any labels are found (when labelHighlighted=TRUE or labelTop>0)
 #                    sameScale=FALSE,             # When multiple plots are drawn, should they all be the same scale with min and max x and y ranges?
 #                    HTMLout=TRUE,                # output interactive HTML copies that can be opened in browser. Requires plotly package.
 #                    outFilePrefix="4",           # typically "4", or step # in pipeline being run
@@ -458,6 +460,13 @@ for (testIndex in testIndexMasterList) {
       require(ggrepel,quietly=TRUE)
     }
 
+    if(!exists("labelHighlighted")) labelHighlighted=FALSE
+    if(!exists("highlightGeneProducts")) highlightGeneProducts=c()
+    if(labelHighlighted & length(highlightGeneProducts)>0) {
+      if(!"label" %in% colnames(df.oneColor)) df.oneColor$label=rep("",length(df.oneColor$Symbol))
+      df.oneColor$label[which(df.oneColor$Symbol %in% intersect(df.oneColor$Symbol,highlightGeneProducts))] <- df.oneColor$Symbol[which(df.oneColor$Symbol %in% intersect(df.oneColor$Symbol,highlightGeneProducts))]
+    }      
+
     if(!exists("sameScale")) sameScale=FALSE
     if(sameScale) {
       ANOVAout.all.negLogP<-t(apply(ANOVAout,1,function(x) { y=x[testIndexMasterList]; y[which(y==0)] <- x[2]; -log10(as.numeric(y)); }))
@@ -470,8 +479,8 @@ for (testIndex in testIndexMasterList) {
       yRange[[list_element]]=c(0, max(df.oneColor$negLogP))
     }
 
-    if(labelTop>0) {
-      options(ggrepel.max.overlaps = Inf)  # Improves compatibility of ggrepel labeling in RStudio.
+    if(labelTop>0 | "label" %in% colnames(df.oneColor)) {
+      options(ggrepel.max.overlaps = 1)  # Improves compatibility of ggrepel labeling in RStudio.
       volcanoweb <- ggplot(data = df.oneColor, aes(x = xdata, y = negLogP, color = color1, text = Symbol, label = label))
     } else {
       volcanoweb <- ggplot(data = df.oneColor, aes(x = xdata, y = negLogP, color = color1, text = Symbol))
@@ -505,8 +514,9 @@ for (testIndex in testIndexMasterList) {
         panel.background = element_rect(fill = "white")
       )
     
-    if(labelTop>0) {
-      volcanoweb <- volcanoweb + geom_label_repel(box.padding = 0.5,label.size=NA)
+    if(labelTop>0 | "label" %in% colnames(df.oneColor)) {
+      if(!exists("labelSize")) labelSize=4.5
+      volcanoweb <- volcanoweb + geom_label_repel(box.padding = 0.5,label.size=NA, fill=NA, size=labelSize)  #label.size is for border width; size is for font size; fill is for background (behind text) color.
     }
 
     volcListModColors[[list_element]] <- volcano1
