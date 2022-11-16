@@ -470,13 +470,13 @@ for (testIndex in testIndexMasterList) {
     if(!exists("sameScale")) sameScale=FALSE
     if(sameScale) {
       ANOVAout.all.negLogP<-t(apply(ANOVAout,1,function(x) { y=x[testIndexMasterList]; y[which(y==0)] <- x[2]; -log10(as.numeric(y)); }))
-      yRange[[list_element]]=c(0,max(ANOVAout.all.negLogP))
+      yRange[[list_element]]=c(0,max(ANOVAout.all.negLogP,na.rm=TRUE))
       ANOVAout.all.log2FC<-ANOVAout[,testIndexMasterList+numComp]
       if(length(flip)>0) for (column in flip) ANOVAout.all.log2FC[,column-2] = ANOVAout.all.log2FC[,column-2]*(-1)
-      xRange[[list_element]]=range(ANOVAout.all.log2FC)
+      xRange[[list_element]]=range(ANOVAout.all.log2FC,na.rm=TRUE)
     } else {
-      xRange[[list_element]]=c(min(as.numeric(df.oneColor[, testIndex + numComp])), max(as.numeric(df.oneColor[, testIndex + numComp])))
-      yRange[[list_element]]=c(0, max(df.oneColor$negLogP))
+      xRange[[list_element]]=c(min(as.numeric(df.oneColor[, testIndex + numComp]),na.rm=TRUE), max(as.numeric(df.oneColor[, testIndex + numComp]),na.rm=TRUE))
+      yRange[[list_element]]=c(0, max(df.oneColor$negLogP,na.rm=TRUE))
     }
 
     if(labelTop>0 | "label" %in% colnames(df.oneColor)) {
