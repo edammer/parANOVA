@@ -158,7 +158,7 @@ helperfn <- function(xx) {
         this.comp=rownames(tukresult)[comp]
         grp1=gsub("^(.*)\\-.*","\\1",this.comp)
         grp2=gsub("^.*\\-(.*)$","\\1",this.comp)
-        lowTuk.p.estimate <- p.adjust(t.test(x[SampleType==grp1,"x"],x[SampleType==grp2,"x"],alternative="two.sided",var.equal=FALSE)$p.value, method="bonferroni",n=nrow(tukresult))
+        lowTuk.p.estimate <- tryCatch( p.adjust(t.test(x[SampleType==grp1,"x"],x[SampleType==grp2,"x"],alternative="two.sided",var.equal=FALSE)$p.value, method="bonferroni",n=nrow(tukresult)), error=function(e) c(1) )
         tukresult[comp,"p.adj"] <- lowTuk.p.estimate
       }
     }
