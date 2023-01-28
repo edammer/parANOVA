@@ -1,5 +1,5 @@
 ########################################################################################################
-## ANOVA / DiffEx -- 3 user functions:
+## ANOVA / DiffEx -- 3 core user functions:
 ##
 ##   parANOVA.dex      -- create ANOVAout dataframe of tests for differential expression/abundance
 ##   plotVolc          -- create PDF and HTML Volcano Plots, output volcano settings to variables used later
@@ -116,3 +116,115 @@ plotVolc()                 # runs on ANOVAout as input (need not be specified).
 #################################################################
 
 DEXpercentStacked()        # runs on prior function outputs as input; writes stacked bar plot(s) to PDF.
+
+
+
+## End of examples using 3 core functions of this repository.
+##############################################################################
+
+
+
+########################################################################################################
+## Correlation Alternative to ANOVA / DiffEx --
+##
+##   trait.corStat     -- create CORout dataframe of correlation p and R values which can be used in volcano
+##                        and other steps of the pipeline
+##
+#########################################
+## Required Loaded Data and Parameters ##
+#########################################
+
+rootdir="e:/SysBioPipeline/"
+setwd(rootdir)
+load("SeyfriedPipelineOutput-test.RData")
+
+
+# Parameters (function may fallback to defaults if unspecified)
+NETcolors=net$colors                           # list net with slot/vector containing module color assignments; length of vector must be equal to number of rows in cleanDat.
+outputCSV=TRUE                                 # Output Full Table of statistics?  TRUE/FALSE
+outFilePrefix="4"                              # typically "4", or step # in pipeline being run; for output file sorting by filename.
+outFileSuffix="DeepADproteome"                 # A description of the project, used as a filename suffix
+
+# These parameters are specific to trait correlation statistics generation; traits are provided as columns of the data frame stored in the provided example RData as the variable numericMeta. 
+cor.traits=c("Astro","Endo","Micro","Neuro","Oligo")                 # Brain (DLPFC) tissue sample cell type proportion estimates from an abundance x sample matrix deconvolution algorithm
+filter.trait="Center"                                                # Center at which the tissue samples were collected during autopsy
+filter.trait.subsets=c("ALL","Emory","Hopkins","IU","UCSF","WashU")  # Subsets of case samples will be used for correlation to the cell type proportion estimates
+                                                                     # (5 separate cor.traits x 6 sample subsets = 30 total p and R value columns to generate)
+corFn="bicor"                                                        #'bicor' or anything else will cause Pearson (cor) to be used
+
+
+source("./parANOVA.dex.R")
+CORout <- trait.corStat()                      # runs on cleanDat and Grouping variables as required input.
+# Correlation p + R table calculations complete. If you want to use the table with plotVolc(), set the variable corVolc=TRUE and use variable CORout to store the table generated.
+
+
+#head(CORout)
+dim(CORout)
+#[1] 9379   63   #column count is for 2 unused columns, 30 p value columns, 30 R value (bicor) columns, and the network module color assignments as the last column
+
+
+
+
+
+## Find protein rows with desired correlation stat profile(s) - add TRUE/FALSE filter for criteria met in first 2 (unused) columns of CORout data frame
+## These boolean columns can be used as filters later. (optional)
+colnames(CORout)[1:2]<-c("Filter.ALLsamples.NeuronCor.Sig",
+                         "Filter.OnlyOneCenterSamples.NeuronCor.Sig")
+
+# Which proteins are signigicantly correlated with neuronal proportions across all samples, and NOT significantly correlated with any of the other 4 cell type proportions?
+this.column=colnames(CORout)[1]
+CORout[,this.column]<-FALSE
+CORout[which(CORout[,"p Neuro.ALL"]<0.01 & CORout[,"p Astro.ALL"]>0.05 & CORout[,"p Endo.ALL"]>0.05 & CORout[,"p Micro.ALL"]>0.05 & CORout[,"p Oligo.ALL"]>0.05), this.column] <- TRUE
+# Which proteins are significantly correlated with neuronal propotions only in samples from a single center?
+this.column=colnames(CORout)[2]
+CORout[,this.column]<-FALSE
+Neuron.ALLsample.ColumnIndex<-which(grepl("p Neuro.ALL",colnames(CORout)))
+Neuron.SeparateCenter.ColumnIndices<-which(grepl("p Neuro.",colnames(CORout)) & !grepl("p Neuro.ALL",colnames(CORout)))
+CORout[unlist(sapply(1:nrow(CORout),function(x) { row=CORout[x,]; if(row[Neuron.ALLsample.ColumnIndex]>0.05 & length(which(row[Neuron.SeparateCenter.ColumnIndices]<0.01))==1) x; } )), this.column] <- TRUE
+
+table(CORout[,1])
+#FALSE  TRUE 
+# 9364    15
+
+table(CORout[,2])
+#FALSE  TRUE 
+# 9129   250
+
+
+corVolc=TRUE        # changes the behavior of plotVolc, DEXpercentStacked, and GOparallel functions later in the pipeline, to use CORout
+useNETcolors=TRUE
+sameScale=TRUE
+highlightGeneProducts=rownames(CORout)[which(CORout$Filter.ALLsamples.NeuronCor.Sig)]  # Specifies which spots should be large
+labelHighlighted=TRUE
+plotVolc()          # Plots PDFs and HTMLs with large spots for proteins significant (p<0.01) for neuron proportion correlation in all samples,
+                    # and not significant (p>0.05) for all the other 4 cell types
+
+
+
+DEXpercentStacked(CORout)
+#- corVolc=TRUE so plotting volcanoes using correlation statistics in the table stored in variable CORout.
+#- Found plotVolc function output variable testIndexMasterList to recall comparisons selected for selectComps. Using the following comparisons:
+#...
+#- Plotting using correlation volcano(es) stats. Variable flip will be ignored so positive correlations remain positive.
+#- Plotting significant correlation hit counts. Variable FCmin will be ignored.
+#- Variable outputfigs not specified. Saving volcano plots to e:/OneDrive/SystemsBioPipeline .
+#
+#Performing calculations for mean differential abundance and fractions of differential gene products per module:
+#- Generating PDF file(s)...
+
+
+## Gene Ongology Gene Set Enrichment Analysis of significantly trait-correlated proteins:
+source("./GOparallel-FET.R")  #Available from the repository file https://github.com/edammer/GOparallel/blob/main/GOparallel-FET.R
+ANOVAgroups=TRUE
+parallelThreads=30
+
+GOparallel(CORout)
+#- ANOVAout not in memory, trying to use input provided to this function (could be ANOVAout or CORout).
+#- corVolc=TRUE so getting gene lists from significant correlations in statistics table stored in variable CORout.
+#- Significant groups were defined by trait corrrelation. Variable flip will be ignored so positive correlations remain positive.
+#- Extracting names of groups being compared in ANOVAout table from p value column headers...
+#
+#[1] "...Applying a minimum p value cutoff of 0.05 for correlation statistics lists..."
+#- Using correlation significance for defining groups. Variable FCmin will be ignored.
+#
+#Running FET overlap statistics in parallel for  60  symbol lists using up to  30  threads...
