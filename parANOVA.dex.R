@@ -10,6 +10,10 @@
 ##                      output pdf with a page for each pairwise comparison showing % of module members meeting
 ##                      differential expression criteria in volcano.
 ##
+## trait.corStat()    - creates alternative output to ANOVAout, using only correlation R and p (effect size and significance)
+##                      correlation will be to one or more traits available in numericMeta, across all samples (default),
+##                      or subset(s) of samples defined by the values in numericMeta for a second categorical, discrete, trait.
+##
 #################################################
 ## By Eric Dammer, Duc Duong, and Qiudong Deng ##
 #################################################
@@ -188,6 +192,90 @@ TunequalHelperfn  <- function(xx) {
 
 
 
+################################
+## Alternative to ANOVA stats ##
+################################
+
+trait.corStat <- function(dummyVar="",
+## All parameters are set as variables of the global environment, or if not set, fallback to defaults in the function.
+#                         cleanDat.=cleanDat,                             # cleanDat, data table of 'cleaned' relative abundance with rows (genes or proteins) and columns (samples)
+#                         NETcolors=net$colors,                           # a vector containing module color assignments
+#                                                                         # length of vector must be equal to number of rows in cleanDat.
+#                                                                         # Colors are only added to table output if available; function tries to use NETcolors variable , with fallback to net$colors
+#                         outputCSV=TRUE,                                 # Output Full Table of statistics?  TRUE/FALSE
+#                         outFilePrefix="4",                              # typically "4", or step # in pipeline being run
+#                         outFileSuffix=FileBaseName,                     # A description of the project, used as a filename suffix
+## Specific to this function:
+#                         cor.traits=c("GRGR","GAGA","GAGR")              # column name(s) of numericMeta (traits, sample metadata); columns to be used for correlation to cleanDat abundance values
+#                         filter.trait="Day"                              # a single column name of numericMeta to use for filtering/subsetting samples to correlate to cor.traits
+#                         filter.trait.subsets=c("ALL","Day5","Day10","Day15") # value(s) in filter.trait column to use for subsetting samples when correlating cleanDat rows to cor.trait(s)
+#                         corFn="bicor"                              #'bicor' or anything else will use Pearson correlation function
+                         env=.GlobalEnv) {
+
+############################################
+## PARAMETER VARIABLES CHECKED / DEFAULTS ##
+############################################
+  if (!exists("cleanDat")) stop("cleanDat variable must exist, holding gene product (rows) X sample (columns) data in the form of log2(relative abundance).")
+  if (!exists("NETcolors")) if(exists("net")) { if ("colors" %in% names(net)) { NETcolors=net$colors } else { NETcolors=c() } } else { NETcolors=c() }
+  if (!length(NETcolors)==nrow(cleanDat)) { cat("- Network color assignment vector not supplied or not of length in rows of cleanDat; will not be included in output table and data frame.\n") }
+  if (!exists("outputCSV")) { outputCSV=TRUE } else { if(!is.logical(outputCSV)) { outputCSV=TRUE } }
+  if (!exists("outFilePrefix")) { outFilePrefix="" } else { if (nchar(outFilePrefix)>0) outFilePrefix=paste0(outFilePrefix,".") }
+  if (!exists("outFileSuffix")) { if (exists("FileBaseName")) { outFileSuffix=paste0("-",FileBaseName) } else { outFileSuffix="-unspecified_study" }} else { if (nchar(outFileSuffix)>0) outFileSuffix=paste0("-",outFileSuffix) }
+
+  if (!length(cor.traits)==length(which(cor.traits %in% colnames(numericMeta)))) stop("Not all columns specified in variable cor.traits were found in traits data (numericMeta data frame).\n")
+  if (!length(which(filter.trait %in% colnames(numericMeta)))==1) stop("The column of trait data specified by variable filter.trait not found, or more than one filter.trait was specified.\n")
+  if (!exists("filter.trait.subsets")) filter.trait.subsets=="ALL"
+  filter.trait.subsets<-gsub("^[Aa][Ll][Ll]$","ALL",filter.trait.subsets)
+  if ("ALL" %in% filter.trait.subsets) { if(length(filter.trait.subsets)>1) { filter.trait.subsets.notALL=filter.trait.subsets[which(!filter.trait.subsets=="ALL")] } else { filter.trait.subsets.notALL=c() }} else { filter.trait.subsets.notALL=filter.trait.subsets }
+  if (length(filter.trait.subsets.notALL)>0) if (!length(filter.trait.subsets.notALL)==length(which(filter.trait.subsets.notALL %in% names(table(numericMeta[,filter.trait])))) | min(table(numericMeta[,filter.trait])[filter.trait.subsets.notALL])<3) stop(paste0("Not all values specified in variable filter.trait.subsets found in numericMeta column ",filter.trait," or less than 3 total values (samples) found for such a value.\n"))
+  if (corFn=="bicor") { this.corFn="bicor" } else { cat("- Using Pearson correlation (corFn not set or not='bicor').\n"); this.corFn="cor"; }
+
+  CORstatList<-list()
+  for(cor.trait in cor.traits) {
+    for(filter.trait.value in filter.trait.subsets) {
+        subset.idx= if(!filter.trait.value=="ALL") { which(numericMeta[,filter.trait]==filter.trait.value) } else { c(1:nrow(numericMeta)) }
+        rawStats=if(this.corFn=="bicor") { apply(cleanDat,1,function(x) WGCNA::bicorAndPvalue(x[subset.idx],numericMeta[subset.idx,cor.trait],use="pairwise.complete.obs",alternative="two.sided")) } else {
+                                           apply(cleanDat,1,function(x) WGCNA::corAndPvalue(x[subset.idx],numericMeta[subset.idx,cor.trait],use="pairwise.complete.obs",alternative="two.sided")) }
+      CORstatList[[paste0(gsub("\\.","_",cor.trait),".",filter.trait.value)]]=as.data.frame(matrix( unlist(lapply(rawStats,function(x) c(x[this.corFn],x["p"],x["Z"],x["t"],x["nObs"]))), nrow=nrow(cleanDat),ncol=5,byrow=TRUE) )
+      this.list=paste0(gsub("\\.","_",cor.trait),".",filter.trait.value)  #cor.trait has '.' changed to '_' for plotVolc() run with corVolc=TRUE to parse column names consistently & correctly
+      if(!this.corFn=="bicor") this.corFn="cor"
+      colnames(CORstatList[[this.list]])<-c(this.corFn,"p","Z","t","nObs")
+      rownames(CORstatList[[this.list]])<-rownames(cleanDat)
+      cat(paste0("Finished CORstatList[[",this.list,"]]\n"))
+    }
+  }
+
+  CORout<-matrix(NA,nrow=nrow(cleanDat),ncol=2)
+  colnames(CORout)<-c("Unused.Col","Unused.Col2")
+  for(columnX in c("p",this.corFn)) {
+    this.list<-lapply(CORstatList,function(statTable) statTable[,columnX])
+    #this.mat<-matrix(NA,nrow=nrow(cleanDat),ncol=0)
+    #for(this.corr in names(this.list)) this.mat<-cbind(this.mat,this.list[[this.corr]])
+    this.mat<-matrix(unlist(lapply(CORstatList,function(statTable) statTable[,columnX])),nrow=nrow(cleanDat),byrow=FALSE)
+    #colnames(this.mat)=paste0(columnX," ",colnames(this.mat))
+    colnames(this.mat)=paste0(columnX," ",names(CORstatList))
+    CORout<- cbind(CORout, this.mat)
+  }
+  rownames(CORout)<-rownames(cleanDat)
+  CORout<-as.data.frame(CORout)
+  #CORout$NETcolors=net$colors
+
+  numComp=(ncol(CORout)-2)/2
+
+  ## Add network module colors, if they can be found for all output rows/gene products.
+  if (length(NETcolors)==nrow(CORout)) { CORout$NETcolors <- NETcolors }
+
+  #*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+
+  if(outputCSV)  write.csv(CORout,file=paste0(outFilePrefix,"CORstats-",outFileSuffix,".csv"))
+  #*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+
+
+  #assign("CORout",CORout, envir=.GlobalEnv)
+  cat(" Correlation p + R table calculations complete. If you want to use the table with plotVolc(), set the variable corVolc=TRUE and use variable CORout to store the table generated.\n\n")
+  return(CORout)
+} # end function trait.corStat
+
+
+
 
 ##############################
 ## Volcano Plotter function ##
@@ -217,6 +305,8 @@ plotVolc<- function(dummyVar="",
 #                    outFilePrefix="4",           # typically "4", or step # in pipeline being run
 #                    outFileSuffix=FileBaseName,  # A description of the project, used as a filename suffix
 #                    outputfigs=getwd(),          # "drive:/folder/to/location" to save output PDFs and possible HTML files
+
+#                    corVolc=TRUE                 # Flag - correlation p values and R values in data frame CORout will be used, instead of ANOVA p values and differences of group means in ANOVAout
                     env=.GlobalEnv) {
 
 ############################################
@@ -225,10 +315,14 @@ plotVolc<- function(dummyVar="",
 
 require(ggplot2,quietly=TRUE)
 
-if (!exists("ANOVAout")) if (!length(dummyVar)==1) { cat("- ANOVAout not in memory, using input provided to this function.\n"); ANOVAout=as.data.frame(dummyVar); } else { stop("Variable ANOVAout not found or no input was provided.\nPlease run parANOVA.dex() function first, and save output to ANOVAout variable or pass its output to this function.\n\n") }
-if (!ncol(ANOVAout)>3) stop("- Input or ANOVAout variable contents are not a data (frame) with at least 4 columns. It is not valid output from the parANOVA.dex() function.\n  Please run parANOVA.dex() first.\n\n")
+if(!exists("corVolc")) corVolc=FALSE
+if(corVolc & exists("CORout")) cat("- corVolc=TRUE so plotting volcanoes using correlation statistics in the table stored in variable CORout.\n"); ANOVAout<-CORout;
+if(corVolc & !exists("CORout")) if (!length(dummyVar)==1) { cat("- corVolc=TRUE, but CORout not in memory, using input provided to this function.\n"); ANOVAout=as.data.frame(dummyVar); } else { stop("Variable CORout not found or no input was provided.\nPlease run trait.corStat() function first, and save output to CORout variable or pass its output to this function.\n\n") }
 
-numberOfNonComparisonColumns=length(colnames(ANOVAout)) - length(which(grepl("diff ",colnames(ANOVAout))))*2
+if (!exists("ANOVAout")) if (!length(dummyVar)==1) { cat("- ANOVAout not in memory, using input provided to this function.\n"); ANOVAout=as.data.frame(dummyVar); } else { stop("Variable ANOVAout not found or no input was provided.\nPlease run parANOVA.dex() function first, and save output to ANOVAout variable or pass its output to this function.\n\n") }
+if (!ncol(ANOVAout)>3) stop("- Input or ANOVAout variable contents are not a data (frame) with at least 4 columns. It is not valid output from the parANOVA.dex() or traits.corStat() functions.\n  Please generate input table first.\n\n")
+
+numberOfNonComparisonColumns=length(colnames(ANOVAout)) - if(!corVolc) { length(which(grepl("^diff ",colnames(ANOVAout))))*2 } else { length(which(grepl("^p ",colnames(ANOVAout))))*2 }
 numComp <- (length(colnames(ANOVAout)) - numberOfNonComparisonColumns) / 2 # of columns separating comparisons from matched column of log2(diffs), i.e. # of comparisons
 
 if (!exists("selectComps")) { cat("- No comparison p value columns selected in selectComps. Using ALL comparisons.\n"); selectComps="ALL"; }
@@ -236,10 +330,12 @@ if (selectComps[1]=="ALL" | selectComps[1]=="all" | selectComps[1]=="All") selec
 selectComps=as.integer(selectComps)
 if (max(selectComps)>numComp+2 | min(selectComps)<3) stop("selectComps must be set to 'all' or valid integer p value column indexes of ANOVAout.\n       You have selected a non-p value containing column.")
 
+if(corVolc & exists("flip")) { cat("- Plotting correlation volcano(es). Variable flip will be ignored so positive correlations are to the right of x=0, consistently.\n"); flip=c(); }
 if(!exists("flip")) { cat("- No comparisons selected for flipping numerator and denominator. Variable flip=c().\n"); flip=c(); }
 # What columns (column numbers) of ANOVAout (T-test or Tukey p values) do we plot volcanoes for? 
 testIndexMasterList <- selectComps
 
+if(corVolc & exists("FCmin")) { cat("- Plotting correlation R and p in volcanoes. Variable FCmin will be ignored.\n"); FCmin=0; }
 if (!exists("FCmin")) { cat("- No minimum fold change set in FCmin. Using 0 minimum change.\n"); FCmin=0; }
 
 # log2(1) means NO change minimum to be counted in the volcano bookends; log2(1.25) for 25% FC min.
@@ -283,9 +379,13 @@ BIGspots <- highlightGeneProducts
 
 cutoff=log2(1+FCmin)
 # shows what your cutoff for log2(FC) calculates as
-cat(paste0("\n...Thresholds:\n   [x] Applying a ", FCmin*100,"% minimum fold change threshold at + and - x=", signif(cutoff,2)," .\n"))
-cat(paste0("   [y] with minimum significance cutoff p < ", sigCutoff,", equivalent to -log10(p) y=", round(-log10(sigCutoff),2)," .\n\n"))
-
+if(!corVolc) { 
+	cat(paste0("\n...Thresholds:\n   [x] Applying a ", FCmin*100,"% minimum fold change threshold at + and - x=", signif(cutoff,2)," .\n"))
+	cat(paste0("   [y] with minimum significance cutoff p < ", sigCutoff,", equivalent to -log10(p) y=", round(-log10(sigCutoff),2)," .\n\n"))
+} else {
+	cat(paste0("\n...Thresholds:\n   [x] No minimum R value is needed or used with correlation statistics.\n"))
+	cat(paste0("   [y] minimum Student's significance of correlation p < ", sigCutoff,", equivalent to -log10(p) y=", round(-log10(sigCutoff),2)," .\n\n"))
+}
 
 n <- nrow(ANOVAout)
 dexComps <- list()
@@ -294,7 +394,11 @@ comparisonIDs <- data.frame(dfVariable = rep(NA, length(testIndexMasterList)), C
 for (i in testIndexMasterList) {
   iter <- iter - 1
   # dexRows<-which(ANOVAout[,i]<sigCutoff) #choose rows where the DEX p<sigCutoff
-  comparisonIDs[iter, ] <- as.vector(c(paste0("dexTargets.", gsub("-", ".", colnames(ANOVAout)[i])), paste0(as.character(gsub("-", " vs ", colnames(ANOVAout)[i])))))
+  if(!corVolc) {
+    comparisonIDs[iter, ] <- as.vector(c(paste0("dexTargets.", gsub("-", ".", colnames(ANOVAout)[i])), paste0(as.character(gsub("-", " vs ", colnames(ANOVAout)[i])))))
+  } else { 
+    comparisonIDs[iter, ] <- as.vector(c(paste0("dexTargets.", gsub("^p ", "", colnames(ANOVAout)[i])), paste0(as.character(gsub("^(.*)[' '](.*)\\.(.*)$", "\\1 (\\2 in \\3 samples)", colnames(ANOVAout)[i+numComp])))))
+  }
   dexComps[[comparisonIDs[iter, 1]]] <- ANOVAout
   if (!is.na(match(i, flip))) {
     dexComps[[comparisonIDs[iter, 1]]][, i + numComp] <- -1 * as.numeric(dexComps[[comparisonIDs[iter, 1]]][, i + numComp])
@@ -320,8 +424,13 @@ for (testIndex in testIndexMasterList) {
   cat(paste0("\rProcessing ANOVA column ", testIndex, " (", comparisonIDs$Comparison[iter], ") for volcano ...   "))
 
   # correct 0 Tukey pValues to ANOVA p (in column 2); it's better than taking -log10 of 0 in the next step
-  if (length(which(df[, testIndex] == 0))>0) print(paste0("Found ",length(which(df[, testIndex] == 0))," p=0 values for this comparison! Substituted -log10(p) using one-way ANOVA overall p value (Consider fallback=TRUE in ANOVAout calculation.)"))
-  df[which(df[, testIndex] == 0), testIndex] <- as.numeric(df[which(df[, testIndex] == 0), 2])
+  if(!corVolc) {
+    if (length(which(df[, testIndex] == 0))>0) print(paste0("Found ",length(which(df[, testIndex] == 0))," p=0 value(s) for this comparison! Substituted -log10(p) using one-way ANOVA overall p value (Consider fallback=TRUE in ANOVAout calculation.)"))
+    df[which(df[, testIndex] == 0), testIndex] <- as.numeric(df[which(df[, testIndex] == 0), 2])
+  } else {
+    if (length(which(df[, testIndex] == 0))>0) print(paste0("Found ",length(which(df[, testIndex] == 0))," p=0 value(s) for this comparison! Substituted -log10(p) value of 200 for these correlations."))
+    df[which(df[, testIndex] == 0), testIndex] <- 1e-200
+  }    
  
   ## Check if ANOVA pVal is Significant and above FC cutoff defined above. Thresholds are used to set volcano point colors
   df[, testIndex][is.na(df[, testIndex])] <- 1 # p=0.9999 instead of NA
@@ -343,7 +452,7 @@ for (testIndex in testIndexMasterList) {
   df$threshold1 <- as.factor(df$threshold1)
   
   df$Symbol <- rownames(df)
-  if (symbolsOnly) df$Symbol <- as.data.frame(do.call("rbind", strsplit( as.data.frame(do.call("rbind", strsplit(as.character(rownames(df)), "[|]")))[, 1], "[;]")))[,1]
+  if (symbolsOnly) df$Symbol <- as.data.frame(do.call("rbind", strsplit( paste0(as.data.frame(do.call("rbind", strsplit(as.character(rownames(df)), "[|]")))[, 1],";"), "[;]")))[,1]
   
   ## Color Interesting Gene Product Spots DIFFERENTLY as 4th color if doing blue/red/green (no module colors) -- (4=gold1 below)
   if(useNETcolors) { 
@@ -413,13 +522,18 @@ for (testIndex in testIndexMasterList) {
     list_element <- paste(comparisonIDs$dfVariable[iter], eachColor, sep = ".") # colnames(df)[testIndex]
     pointColorsVectorListForPlots[[list_element]] <- data.frame(color1 = factor(as.integer(df.oneColor$color1)), color2 = as.character(df.oneColor$color2), color3 = as.character(df.oneColor$color3), size = as.numeric(df.oneColor$size), pch = as.numeric(df.oneColor$pch)) #*** df.oneColor$NETcolors
     
-    
+    downregulated.text=if(!corVolc) { "Downregulated" } else { "Negative Correlations" }
+    upregulated.text=if(!corVolc) { "Upregulated" } else { "Positive Correlations" }
+
+    xlab.expr=if(!corVolc) { as.expression(bquote("Difference, log"[2] ~ .(comparisonIDs$Comparison[iter]))) } else { as.expression(comparisonIDs$Comparison[iter]) }
+    xlab.text=if(!corVolc) { paste0("Difference, log2 ", comparisonIDs$Comparison[iter]) } else { comparisonIDs$Comparison[iter] }
+
     volcano1 <- ggplot(data = df.oneColor, aes(x = xdata, y = negLogP, color = color1, text = Symbol)) +
       # scale_colour_manual(values = unique(data.frame(col1=df.oneColor$color1,col2=df.oneColor$color2))[order(unique(data.frame(col1=df.oneColor$color1,col2=df.oneColor$color2))[,1]),2] )+ #THIS COLOR(S) IS LOOKED UP ACTIVELY DURING GRAPHICS OUTPUT IN THE VARIABLE, SO WE'VE USED A LIST ELEMENT THAT IS NEVER CHANGED
       geom_point(aes(fill = pointColorsVectorListForPlots[[list_element]][, "color3"]), alpha = 0.66, size = pointColorsVectorListForPlots[[list_element]]$size, pch = pointColorsVectorListForPlots[[list_element]][, "pch"], color = pointColorsVectorListForPlots[[list_element]][, "color3"]) +
       theme(legend.position = "none") +
       xlim(c(min(as.numeric(df.oneColor[, testIndex + numComp])), max(as.numeric(df.oneColor[, testIndex + numComp])))) + ylim(c(0, max(df.oneColor$negLogP))) +
-      xlab(as.expression(bquote("Difference, log"[2] ~ .(comparisonIDs$Comparison[iter])))) + # colnames(df.oneColor)[testIndex]
+      xlab(xlab.expr) + # colnames(df.oneColor)[testIndex]
       ylab(as.expression(bquote("-log"[10] ~ "p value"))) +
       theme(axis.title.x = element_text(size = rel(1.8), angle = 00)) +
       theme(axis.title.y = element_text(size = rel(1.8), angle = 90)) +
@@ -428,8 +542,8 @@ for (testIndex in testIndexMasterList) {
       # geom_text(aes(0,1.30103,label = 1.30103, vjust = -1))+
       geom_vline(xintercept = cutoff, linetype = "dashed", color = "black", size = 1.2) +
       geom_vline(xintercept = -cutoff, linetype = "dashed", color = "black", size = 1.2) +
-      annotate("text", x = min(as.numeric(df.oneColor[, testIndex + numComp])) / 2, y = max(df.oneColor$negLogP) * .95, size = 5, label = paste0("Downregulated: ", bquote(.(length(which(as.numeric(as.character(df.oneColor$threshold1)) == 2)))))) +
-      annotate("text", x = max(as.numeric(df.oneColor[, testIndex + numComp])) / 2, y = max(df.oneColor$negLogP) * .95, size = 5, label = paste0("Upregulated: ", bquote(.(length(which(as.numeric(as.character(df.oneColor$threshold1)) == 1)))))) +
+      annotate("text", x = min(as.numeric(df.oneColor[, testIndex + numComp])) / 2, y = max(df.oneColor$negLogP) * .95, size = 5, label = paste0(downregulated.text,": ", bquote(.(length(which(as.numeric(as.character(df.oneColor$threshold1)) == 2)))))) +
+      annotate("text", x = max(as.numeric(df.oneColor[, testIndex + numComp])) / 2, y = max(df.oneColor$negLogP) * .95, size = 5, label = paste0(upregulated.text,": ", bquote(.(length(which(as.numeric(as.character(df.oneColor$threshold1)) == 1)))))) +
       
       theme(
         # axis.text = element_text(size = 14),
@@ -492,7 +606,7 @@ for (testIndex in testIndexMasterList) {
       geom_point(alpha = 0.66, size = pointColorsVectorListForPlots[[list_element]]$size, pch = 16) + # pch=pointColorsVectorListForPlots[[list_element]][,"pch"] just uses the higher pch code in the web render.
       theme(legend.position = "none") +
       xlim(xRange[[list_element]]) + ylim(yRange[[list_element]]) +
-      xlab(paste0("Difference, log2 ", comparisonIDs$Comparison[iter])) +
+      xlab(xlab.text) +
       ylab(paste0("-log10 p value")) +
       theme(axis.title.x = element_text(size = rel(1.8), angle = 00)) +
       theme(axis.title.y = element_text(size = rel(1.8), angle = 90)) +
@@ -501,8 +615,8 @@ for (testIndex in testIndexMasterList) {
       # geom_text(aes(0,1.30103,label = 1.30103, vjust = -1))+
       geom_vline(xintercept = cutoff, linetype = "dashed", color = "black", size = 1.2) +
       geom_vline(xintercept = -cutoff, linetype = "dashed", color = "black", size = 1.2) +
-      annotate("text", x = min(xRange[[list_element]]) / 2, y = max(yRange[[list_element]]) * .95, size = 5, label = paste0("Downregulated: ", bquote(.(length(which(as.numeric(as.character(df.oneColor$threshold1)) == 2)))))) +
-      annotate("text", x = max(xRange[[list_element]]) / 2, y = max(yRange[[list_element]]) * .95, size = 5, label = paste0("Upregulated: ", bquote(.(length(which(as.numeric(as.character(df.oneColor$threshold1)) == 1)))))) +
+      annotate("text", x = min(xRange[[list_element]]) / 2, y = max(yRange[[list_element]]) * .95, size = 5, label = paste0(downregulated.text,": ", bquote(.(length(which(as.numeric(as.character(df.oneColor$threshold1)) == 2)))))) +
+      annotate("text", x = max(xRange[[list_element]]) / 2, y = max(yRange[[list_element]]) * .95, size = 5, label = paste0(upregulated.text,": ", bquote(.(length(which(as.numeric(as.character(df.oneColor$threshold1)) == 1)))))) +
       
       theme(
         # axis.text = element_text(size = 14),
@@ -623,11 +737,14 @@ suppressPackageStartupMessages(require(ggplot2,quietly=TRUE))
 #suppressPackageStartupMessages(require(Cairo,quietly=TRUE))
 suppressPackageStartupMessages(require(WGCNA,quietly=TRUE))
 
+if(!exists("corVolc")) corVolc=FALSE
+if(corVolc & exists("CORout")) cat("- corVolc=TRUE so plotting volcanoes using correlation statistics in the table stored in variable CORout.\n"); ANOVAout<-CORout;
+if(corVolc & !exists("CORout")) if (!length(dummyVar)==1) { cat("- corVolc=TRUE, but CORout not in memory, using input provided to this function.\n"); ANOVAout=as.data.frame(dummyVar); } else { stop("Variable CORout not found or no input was provided.\nPlease run trait.corStat() function first, and save output to CORout variable or pass its output to this function.\n\n") }
 
 if (!exists("ANOVAout")) if (!length(dummyVar)==1) { cat("- ANOVAout not in memory, using input provided to this function.\n"); ANOVAout=as.data.frame(dummyVar); } else { stop("Variable ANOVAout not found or no input was provided.\nPlease run parANOVA.dex() function first, and save output to ANOVAout variable or pass its output to this function.\n\n") }
 if (!ncol(ANOVAout)>3) stop("\nInput or ANOVAout variable contents are not a data (frame) with at least 4 columns. It is not valid output from the parANOVA.dex() function.\n  Please run parANOVA.dex() first.\n\n")
 
-numberOfNonComparisonColumns=length(colnames(ANOVAout)) - length(which(grepl("diff ",colnames(ANOVAout))))*2
+numberOfNonComparisonColumns=length(colnames(ANOVAout)) - if(!corVolc) { length(which(grepl("^diff ",colnames(ANOVAout))))*2 } else { length(which(grepl("^p ",colnames(ANOVAout))))*2 }
 numComp <- (length(colnames(ANOVAout)) - numberOfNonComparisonColumns) / 2 # of columns separating comparisons from matched column of log2(diffs), i.e. # of comparisons
 
 if (!exists("NETcolors")) {
@@ -651,8 +768,12 @@ if (selectComps[1]=="ALL" | selectComps[1]=="all" | selectComps[1]=="All") selec
 selectComps=as.integer(selectComps)
 if (max(selectComps)>numComp+2 | min(selectComps)<3) stop("selectComps must be set to 'all' or valid integer p value column indexes of ANOVAout.\n       You have selected a non-p value containing column.")
 
+if(corVolc & exists("flip")) { cat("- Plotting using correlation volcano(es) stats. Variable flip will be ignored so positive correlations remain positive.\n"); flip=c(); }
 if(!exists("flip")) { cat("- No comparisons selected for flipping numerator and denominator. Variable flip=c().\n"); flip=c(); }
+# What columns (column numbers) of ANOVAout (T-test or Tukey p values) do we plot volcanoes for? 
+testIndexMasterList <- selectComps
 
+if(corVolc & exists("FCmin")) { cat("- Plotting significant correlation hit counts. Variable FCmin will be ignored.\n"); FCmin=0; }
 if (!exists("FCmin")) { cat("- No minimum fold change set in FCmin. Using 0 minimum change.\n"); FCmin=0; }
 # log2(1) means NO change minimum to be counted in the volcano bookends; log2(1.25) for 25% FC min.
 cutoff <- log2(1+FCmin)
@@ -789,15 +910,20 @@ plot.inset <- ggplot(colorData, aes(x=Mnum, y=rep(1,nrow(colorData)))) + geom_ba
   scale_x_discrete( limits=colorData$Mnum)   + theme(axis.text.x=element_text(angle=90, hjust=1, vjust=0.3), axis.text.y=element_text(color="#FFFFFF")) + labs(x="", y="") + theme(axis.title = element_text(color="#FFFFFF", face="bold", size=22), axis.text.x = element_text(face="bold", color="#000000", size=14, angle=90), axis.ticks.y=element_blank(), panel.background = element_rect(fill = "transparent",colour = NA), panel.grid.minor = element_blank(), panel.grid.major = element_blank(), plot.background = element_rect(fill = "transparent",colour = NA)) + scale_y_continuous(expand = expansion(mult = c(0, 0)), limits=c(0,1), breaks=c(0), label=c("")) + theme(plot.title=element_text(color="black", face="bold", size=32))
 grob.inset <- ggplotGrob(plot.inset)
 
+scalebar.text = if(!corVolc) { "mean log2FC\n" } else { "mean R\n" }
+yaxis.text = if(!corVolc) { "DEx, Fraction of Module Members" } else { "Fraction of Module Members with Sig. Correl." }
+filename.text = if(!corVolc) { "ANOVA.dex-FractionBar" } else { "corStat.sig-FractionBar" }
 for (z in 1:length(comparisonIDs$Comparison)) {
- pdf(file=paste0(outputfigs,"/",outFilePrefix,"ANOVA.dex-FractionBar-",gsub("\\s","_",comparisonIDs$Comparison[z]),outFileSuffix,".pdf"),width=15,height=11.25, onefile=FALSE)  # onefile=FALSE for forcing no blank page 1.
+ pdf(file=paste0(outputfigs,"/",outFilePrefix,filename.text,"-",gsub("\\s","_",comparisonIDs$Comparison[z]),outFileSuffix,".pdf"),width=15,height=11.25, onefile=FALSE)  # onefile=FALSE for forcing no blank page 1.
  par(mfrow=c(2,1))
  par(mar=c(5,6,4,2))
 
+ plotTitle.text = if(!corVolc) { as.character(comparisonIDs$Comparison[z]) } else { paste0(as.character(comparisonIDs$Comparison[z]), " sample correlation < ",sigCutoff) }
+ 
  print(
- ggplot(dexCompsStacks[[comparisonIDs$dfVariable[z]]], aes(x=Mnum, y=as.numeric(value))) + geom_bar(stat="identity", color="#000000", aes(fill=as.numeric(dexCompsStacks[[comparisonIDs$dfVariable[z]]]$meanLog2FC))) + labs(x=" \n ", y="DEx, Fraction of Module Members") + theme(axis.title = element_text(color="#000000", face="bold", size=22), axis.ticks.x=element_blank(), axis.text.x = element_blank(), axis.text.y = element_text(face="bold", color="#000000", size=14, angle=0), panel.background = element_rect(fill = "transparent",colour = NA), panel.grid.minor = element_blank(), panel.grid.major = element_blank(), plot.background = element_rect(fill = "transparent",colour = NA)) + scale_y_continuous(limits=c(0,ceiling(yscaleMax*100)/100)) +
-               scale_fill_gradient2(name="mean log2FC\n", limits=c(-maxDN,maxUP), oob = scales::squish, breaks=c(-maxDN*0.99999,-maxDN/2,0,maxUP/2,maxUP*0.99999), labels=c(round(-maxDN,2), round(-maxDN/2,2), 0, round(maxUP/2,2), round(maxUP,2)), minor_breaks=NULL, low="#0058CC", mid="white", high="#CC3300", midpoint=0, space="Lab", na.value="grey50", guide=guide_colorbar(label=TRUE, draw.ulim=TRUE, draw.llim = TRUE, frame.colour = "black", ticks = TRUE, barwidth=30, barheight=1.2, ticks.colour='black', direction='horizontal'), aesthetics="fill") + theme(legend.position="top", legend.text=element_text(size=13), legend.title.align=0) +
-               ggtitle(as.character(comparisonIDs$Comparison[z])) + theme(plot.title=element_text(color="black", face="bold", size=32)) +
+ ggplot(dexCompsStacks[[comparisonIDs$dfVariable[z]]], aes(x=Mnum, y=as.numeric(value))) + geom_bar(stat="identity", color="#000000", aes(fill=as.numeric(dexCompsStacks[[comparisonIDs$dfVariable[z]]]$meanLog2FC))) + labs(x=" \n ", y=yaxis.text) + theme(axis.title = element_text(color="#000000", face="bold", size=22), axis.ticks.x=element_blank(), axis.text.x = element_blank(), axis.text.y = element_text(face="bold", color="#000000", size=14, angle=0), panel.background = element_rect(fill = "transparent",colour = NA), panel.grid.minor = element_blank(), panel.grid.major = element_blank(), plot.background = element_rect(fill = "transparent",colour = NA)) + scale_y_continuous(limits=c(0,ceiling(yscaleMax*100)/100)) +
+               scale_fill_gradient2(name=scalebar.text, limits=c(-maxDN,maxUP), oob = scales::squish, breaks=c(-maxDN*0.99999,-maxDN/2,0,maxUP/2,maxUP*0.99999), labels=c(round(-maxDN,2), round(-maxDN/2,2), 0, round(maxUP/2,2), round(maxUP,2)), minor_breaks=NULL, low="#0058CC", mid="white", high="#CC3300", midpoint=0, space="Lab", na.value="grey50", guide=guide_colorbar(label=TRUE, draw.ulim=TRUE, draw.llim = TRUE, frame.colour = "black", ticks = TRUE, barwidth=30, barheight=1.2, ticks.colour='black', direction='horizontal'), aesthetics="fill") + theme(legend.position="top", legend.text=element_text(size=13), legend.title.align=0) +
+               ggtitle(plotTitle.text) + theme(plot.title=element_text(color="black", face="bold", size=32)) +
    annotation_custom(grob = grob.inset, xmin = 0.05-(-3.5/nrow(colorData)+1.8/70*nrow(colorData)), xmax = nrow(colorData)+(0.62+0.3/70*nrow(colorData)), ymin = -(0.11+0.46/nrow(colorData))*yscaleMax, ymax = 0 )
  )
 
