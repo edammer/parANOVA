@@ -315,8 +315,8 @@ plotVolc<- function(dummyVar="",
 
 require(ggplot2,quietly=TRUE)
 
-if(!exists("corVolc")) corVolc=FALSE
-if(corVolc & exists("CORout")) cat("- corVolc=TRUE so plotting volcanoes using correlation statistics in the table stored in variable CORout.\n"); ANOVAout<-CORout;
+if(!exists("corVolc")) { corVolc=FALSE }
+if(corVolc & exists("CORout")) { cat("- corVolc=TRUE so plotting volcanoes using correlation statistics in the table stored in variable CORout.\n"); ANOVAout<-CORout; }
 if(corVolc & !exists("CORout")) if (!length(dummyVar)==1) { cat("- corVolc=TRUE, but CORout not in memory, using input provided to this function.\n"); ANOVAout=as.data.frame(dummyVar); } else { stop("Variable CORout not found or no input was provided.\nPlease run trait.corStat() function first, and save output to CORout variable or pass its output to this function.\n\n") }
 
 if (!exists("ANOVAout")) if (!length(dummyVar)==1) { cat("- ANOVAout not in memory, using input provided to this function.\n"); ANOVAout=as.data.frame(dummyVar); } else { stop("Variable ANOVAout not found or no input was provided.\nPlease run parANOVA.dex() function first, and save output to ANOVAout variable or pass its output to this function.\n\n") }
