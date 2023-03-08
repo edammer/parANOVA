@@ -630,6 +630,7 @@ for (testIndex in testIndexMasterList) {
     
     if(labelTop>0 | "label" %in% colnames(df.oneColor)) {
       if(!exists("labelSize")) labelSize=4.5
+      require(ggrepel,quietly=TRUE)
       volcanoweb <- volcanoweb + geom_label_repel(box.padding = 0.5,label.size=NA, fill=NA, size=labelSize)  #label.size is for border width; size is for font size; fill is for background (behind text) color.
     }
 
