@@ -15,5 +15,5 @@ These functions generate data stored in variables expected by <a href="https://g
 A third function, DEXpercentStacked, outputs the fraction of each module occupied by DEx proteins for each pairwise comparison, using a heat scale to also show the mean log2(fold change) for the up and down proteins in each module, meeting the thresholding criteria set during use of the plotVolc function.
 _______________
 
-See notes in the .R wrapper for these functions, and use therein of sample RData with pipeline inputs for the above functions available from this repository.
-Sample outputs the wrapper is expected to generate are provided in <a href="https://github.com/edammer/parANOVA/raw/main/parANOVA.dex-sampleOutput.zip">this .ZIP file</a>.
+<b>See notes in the <a href="https://github.com/edammer/parANOVA/blob/main/PipelineWrapper.R">PipelineWrapper.R file</a> for these functions, and use therein of sample RData with pipeline inputs for the above functions available from this repository.
+Sample outputs the wrapper is expected to generate are provided in <a href="https://github.com/edammer/parANOVA/raw/main/parANOVA.dex-sampleOutput.zip">this .ZIP file</a>.</b>
