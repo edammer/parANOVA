@@ -768,10 +768,14 @@ if (!exists("NETcolors")) {
 if (!length(NETcolors)==nrow(ANOVAout)) { stop("\nNETcolors vector length does not match number of rows in the input ANOVA table.\n"); }
 if(!"NETcolors" %in% colnames(ANOVAout)) ANOVAout$NETcolors <- NETcolors
 if(exists("testIndexMasterList")) { cat("- Found plotVolc function output variable testIndexMasterList to recall comparisons selected for selectComps. Using the following comparisons:\n"); print(data.frame('Comparisons'=colnames(ANOVAout)[testIndexMasterList])); selectComps=testIndexMasterList; }
+
 if (!exists("selectComps")) { cat("- No comparison p value columns selected in selectComps. Using ALL comparisons.\n"); selectComps="ALL"; }
+if (max(selectComps)>numComp+2 | min(selectComps)<3) {
+  cat(" - selectComps may not reference valid integer p value column indexes of ANOVAout (or CORout).\n   Output will be for all comparisons or correlation(s).\n")
+  selectComps="ALL"
+}	
 if (selectComps[1]=="ALL" | selectComps[1]=="all" | selectComps[1]=="All") selectComps=c(3:(numComp+2))
 selectComps=as.integer(selectComps)
-if (max(selectComps)>numComp+2 | min(selectComps)<3) stop("selectComps must be set to 'all' or valid integer p value column indexes of ANOVAout.\n       You have selected a non-p value containing column.")
 
 if(corVolc & exists("flip")) { cat("- Plotting using correlation volcano(es) stats. Variable flip will be ignored so positive correlations remain positive.\n"); flip=c(); }
 if(!exists("flip")) { cat("- No comparisons selected for flipping numerator and denominator. Variable flip=c().\n"); flip=c(); }
