@@ -321,14 +321,17 @@ if(corVolc & !exists("CORout")) if (!length(dummyVar)==1) { cat("- corVolc=TRUE,
 
 if (!exists("ANOVAout")) if (!length(dummyVar)==1) { cat("- ANOVAout not in memory, using input provided to this function.\n"); ANOVAout=as.data.frame(dummyVar); } else { stop("Variable ANOVAout not found or no input was provided.\nPlease run parANOVA.dex() function first, and save output to ANOVAout variable or pass its output to this function.\n\n") }
 if (!ncol(ANOVAout)>3) stop("- Input or ANOVAout variable contents are not a data (frame) with at least 4 columns. It is not valid output from the parANOVA.dex() or traits.corStat() functions.\n  Please generate input table first.\n\n")
-
+	
 numberOfNonComparisonColumns=length(colnames(ANOVAout)) - if(!corVolc) { length(which(grepl("^diff ",colnames(ANOVAout))))*2 } else { length(which(grepl("^p ",colnames(ANOVAout))))*2 }
 numComp <- (length(colnames(ANOVAout)) - numberOfNonComparisonColumns) / 2 # of columns separating comparisons from matched column of log2(diffs), i.e. # of comparisons
-
+	
 if (!exists("selectComps")) { cat("- No comparison p value columns selected in selectComps. Using ALL comparisons.\n"); selectComps="ALL"; }
+if (max(selectComps)>numComp+2 | min(selectComps)<3) {
+  cat(" - selectComps may not reference valid integer p value column indexes of ANOVAout (or CORout).\n   Output will be for all comparisons or correlation(s).\n")
+  selectComps="ALL"
+}	
 if (selectComps[1]=="ALL" | selectComps[1]=="all" | selectComps[1]=="All") selectComps=c(3:(numComp+2))
 selectComps=as.integer(selectComps)
-if (max(selectComps)>numComp+2 | min(selectComps)<3) stop("selectComps must be set to 'all' or valid integer p value column indexes of ANOVAout.\n       You have selected a non-p value containing column.")
 
 if(corVolc & exists("flip")) { cat("- Plotting correlation volcano(es). Variable flip will be ignored so positive correlations are to the right of x=0, consistently.\n"); flip=c(); }
 if(!exists("flip")) { cat("- No comparisons selected for flipping numerator and denominator. Variable flip=c().\n"); flip=c(); }
@@ -340,6 +343,7 @@ if (!exists("FCmin")) { cat("- No minimum fold change set in FCmin. Using 0 mini
 
 # log2(1) means NO change minimum to be counted in the volcano bookends; log2(1.25) for 25% FC min.
 cutoff <- log2(1+FCmin)
+
 # p value cutoff for Volcano significant hit counting; dashed line at -log10(sigCutoff)
 if (!exists("signifP")) { cat("- No minimum significant p value threshold specified. Using signifP < 0.05.\n"); signifP=0.05; }
 sigCutoff <- signifP
