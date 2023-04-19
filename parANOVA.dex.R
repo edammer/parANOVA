@@ -456,7 +456,7 @@ for (testIndex in testIndexMasterList) {
   df$threshold1 <- as.factor(df$threshold1)
   
   df$Symbol <- rownames(df)
-  if (symbolsOnly) df$Symbol <- as.data.frame(do.call("rbind", strsplit( paste0(as.data.frame(do.call("rbind", strsplit(as.character(rownames(df)), "[|]")))[, 1],";"), "[;]")))[,1]
+  if (symbolsOnly) df$Symbol <- suppressWarnings(as.data.frame(do.call("rbind", strsplit( paste0(as.data.frame(do.call("rbind", strsplit(as.character(rownames(df)), "[|]")))[, 1],";"), "[;]")))[,1])
   
   ## Color Interesting Gene Product Spots DIFFERENTLY as 4th color if doing blue/red/green (no module colors) -- (4=gold1 below)
   if(useNETcolors) { 
@@ -517,8 +517,7 @@ for (testIndex in testIndexMasterList) {
     if (splitColors) {
       df.oneColor <- df.AllColors[which(df.AllColors$NETcolors == eachColor), ]
       df.oneColor$color1 <- factor(df.oneColor$NETcolors)
-    }
-    else {
+    } else {
       df.oneColor <- df.AllColors
     } # end if (splitColors)
     
@@ -589,7 +588,13 @@ for (testIndex in testIndexMasterList) {
     if(sameScale) {
       ANOVAout.all.negLogP<-t(apply(ANOVAout,1,function(x) { y=x[testIndexMasterList]; y[which(y==0)] <- x[2]; -log10(as.numeric(y)); }))
       yRange[[list_element]]=c(0,max(ANOVAout.all.negLogP,na.rm=TRUE)*1.01)
-      ANOVAout.all.log2FC<-ANOVAout[,testIndexMasterList+numComp]
+      if(!length(testIndexMasterList)==1) {
+        ANOVAout.all.log2FC<-ANOVAout[,testIndexMasterList+numComp]
+      } else {
+        ANOVAout.all.log2FC=data.frame(col1=ANOVAout[,testIndexMasterList+numComp])
+        rownames(ANOVAout.all.log2FC)<-rownames(ANOVAout)
+        colnames(ANOVAout.all.log2FC)<-colnames(ANOVAout)[testIndexMasterList+numComp]
+      }
       if(length(flip)>0) for (column in flip) ANOVAout.all.log2FC[,column-2] = ANOVAout.all.log2FC[,column-2]*(-1)
       xRange[[list_element]]=range(ANOVAout.all.log2FC,na.rm=TRUE)
     } else {
