@@ -541,8 +541,8 @@ for (testIndex in testIndexMasterList) {
       theme(axis.title.x = element_text(size = rel(1.8), angle = 00)) +
       theme(axis.title.y = element_text(size = rel(1.8), angle = 90)) +
       
-      geom_hline(yintercept = 1.30103, linetype = "dashed", color = "black", size = 1.2) +
-      # geom_text(aes(0,1.30103,label = 1.30103, vjust = -1))+
+      geom_hline(yintercept = -log10(sigCutoff), linetype = "dashed", color = "black", size = 1.2) +
+       # annotate("text", label=paste0("y=",signif(-log10(sigCutoff),3),"; p=",sigCutoff), x=xRange[[list_element]][1], y=-log10(sigCutoff), vjust = -1, hjust=0) +
       geom_vline(xintercept = cutoff, linetype = "dashed", color = "black", size = 1.2) +
       geom_vline(xintercept = -cutoff, linetype = "dashed", color = "black", size = 1.2) +
       annotate("text", x = min(as.numeric(df.oneColor[, testIndex + numComp])) / 2, y = max(df.oneColor$negLogP) * .95, size = 5, label = paste0(downregulated.text,": ", bquote(.(length(which(as.numeric(as.character(df.oneColor$threshold1)) == 2)))))) +
@@ -620,8 +620,8 @@ for (testIndex in testIndexMasterList) {
       theme(axis.title.x = element_text(size = rel(1.8), angle = 00)) +
       theme(axis.title.y = element_text(size = rel(1.8), angle = 90)) +
       
-      geom_hline(yintercept = 1.30103, linetype = "dashed", color = "black", size = 1.2) +
-      # geom_text(aes(0,1.30103,label = 1.30103, vjust = -1))+
+      geom_hline(yintercept = -log10(sigCutoff), linetype = "dashed", color = "black", size = 1.2) +
+       # annotate("text", label=paste0("y=",signif(-log10(sigCutoff),3),"; p=",sigCutoff), x=xRange[[list_element]][1], y=-log10(sigCutoff), vjust = -1, hjust=0) +
       geom_vline(xintercept = cutoff, linetype = "dashed", color = "black", size = 1.2) +
       geom_vline(xintercept = -cutoff, linetype = "dashed", color = "black", size = 1.2) +
       annotate("text", x = min(xRange[[list_element]]) / 2, y = max(yRange[[list_element]]) * .95, size = 5, label = paste0(downregulated.text,": ", bquote(.(length(which(as.numeric(as.character(df.oneColor$threshold1)) == 2)))))) +
