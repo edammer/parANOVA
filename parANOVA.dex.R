@@ -301,6 +301,7 @@ plotVolc<- function(dummyVar="",
 #                    labelTop=0,                  # maximum p below which to label all points in the PDF output; OR an integer number of top ranked most significant points to label
 #                    labelSize=4.5,               # text label font size, if any labels are found (when labelHighlighted=TRUE or labelTop>0)
 #                    sameScale=FALSE,             # When multiple plots are drawn, should they all be the same scale with min and max x and y ranges?
+#                    centerYaxis=FALSE,           # Creates plot(s) with x=0 (y-axis) centered between max absolute value x limits; cooperates with sameScale=TRUE to set balanced x limits to max of all plots if both TRUE
 #                    HTMLout=TRUE,                # output interactive HTML copies that can be opened in browser. Requires plotly package.
 #                    outFilePrefix="4",           # typically "4", or step # in pipeline being run
 #                    outFileSuffix=FileBaseName,  # A description of the project, used as a filename suffix
@@ -585,6 +586,7 @@ for (testIndex in testIndexMasterList) {
     }      
 
     if(!exists("sameScale")) sameScale=FALSE
+    if(!exists("centerYaxis")) centerYaxis=FALSE
     if(sameScale) {
       ANOVAout.all.negLogP<-t(apply(ANOVAout,1,function(x) { y=x[testIndexMasterList]; y[which(y==0)] <- x[2]; -log10(as.numeric(y)); }))
       yRange[[list_element]]=c(0,max(ANOVAout.all.negLogP,na.rm=TRUE)*1.01)
@@ -596,10 +598,18 @@ for (testIndex in testIndexMasterList) {
         colnames(ANOVAout.all.log2FC)<-colnames(ANOVAout)[testIndexMasterList+numComp]
       }
       if(length(flip)>0) for (column in flip) ANOVAout.all.log2FC[,column-2] = ANOVAout.all.log2FC[,column-2]*(-1)
-      xRange[[list_element]]=range(ANOVAout.all.log2FC,na.rm=TRUE)
+      if(centerYaxis) {
+        maxAbsX=max(abs(range(ANOVAout.all.log2FC,na.rm=TRUE)))
+        xRange[[list_element]]=c(-maxAbsX,maxAbsX)
+      } else {
+        xRange[[list_element]]=range(ANOVAout.all.log2FC,na.rm=TRUE)
+      }
     } else {
       xRange[[list_element]]=c(min(as.numeric(df.oneColor[, testIndex + numComp]),na.rm=TRUE), max(as.numeric(df.oneColor[, testIndex + numComp]),na.rm=TRUE))
       yRange[[list_element]]=c(0, max(df.oneColor$negLogP,na.rm=TRUE)*1.01)
+      if(centerYaxis) {
+        xRange[[list_element]]=c(-abs(max(xRange[[list_element]])),abs(max(xRange[[list_element]])) )
+      }
     }
 
     if(labelTop>0 | "label" %in% colnames(df.oneColor)) {
