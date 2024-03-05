@@ -597,7 +597,7 @@ for (testIndex in testIndexMasterList) {
         rownames(ANOVAout.all.log2FC)<-rownames(ANOVAout)
         colnames(ANOVAout.all.log2FC)<-colnames(ANOVAout)[testIndexMasterList+numComp]
       }
-      if(length(flip)>0) for (column in flip) ANOVAout.all.log2FC[,column-2] = ANOVAout.all.log2FC[,column-2]*(-1)
+      if(length(flip)>0) for (column in flip) if(!length(testIndexMasterList)==1) { ANOVAout.all.log2FC[,column-2] = ANOVAout.all.log2FC[,column-2]*(-1) } else { ANOVAout.all.log2FC=ANOVAout.all.log2FC*(-1) }  #***
       if(centerYaxis) {
         maxAbsX=max(abs(range(ANOVAout.all.log2FC,na.rm=TRUE)))
         xRange[[list_element]]=c(-maxAbsX,maxAbsX)
