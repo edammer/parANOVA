@@ -137,7 +137,7 @@ parANOVA.dex <- function(dummyVar="",
   if(outputCSV)  write.csv(ANOVAoutList[[caseSubset]],file=paste0(outFilePrefix,"ANOVA_diffEx-",caseSubset,outFileSuffix,".csv"))
   #*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+
 
-#  stopCluster(clusterLocal)
+  stopCluster(clusterLocal)
   return(ANOVAoutList[[caseSubset]])
 } # end function parANOVA.dex
 
@@ -209,7 +209,7 @@ trait.corStat <- function(dummyVar="",
 #                         cor.traits=c("GRGR","GAGA","GAGR")              # column name(s) of numericMeta (traits, sample metadata); columns to be used for correlation to cleanDat abundance values
 #                         filter.trait="Day"                              # a single column name of numericMeta to use for filtering/subsetting samples to correlate to cor.traits
 #                         filter.trait.subsets=c("ALL","Day5","Day10","Day15") # value(s) in filter.trait column to use for subsetting samples when correlating cleanDat rows to cor.trait(s)
-#                         corFn="bicor"                              #'bicor' or anything else will use Pearson correlation function
+#                         corFn="bicor"                                   #'spearman', 'kendall', or 'bicor'; anything else will cause Pearson (cor) to be used
                          env=.GlobalEnv) {
 
 ############################################
@@ -228,26 +228,44 @@ trait.corStat <- function(dummyVar="",
   filter.trait.subsets<-gsub("^[Aa][Ll][Ll]$","ALL",filter.trait.subsets)
   if ("ALL" %in% filter.trait.subsets) { if(length(filter.trait.subsets)>1) { filter.trait.subsets.notALL=filter.trait.subsets[which(!filter.trait.subsets=="ALL")] } else { filter.trait.subsets.notALL=c() }} else { filter.trait.subsets.notALL=filter.trait.subsets }
   if (length(filter.trait.subsets.notALL)>0) if (!length(filter.trait.subsets.notALL)==length(which(filter.trait.subsets.notALL %in% names(table(numericMeta[,filter.trait])))) | min(table(numericMeta[,filter.trait])[filter.trait.subsets.notALL])<3) stop(paste0("Not all values specified in variable filter.trait.subsets found in numericMeta column ",filter.trait," or less than 3 total values (samples) found for such a value.\n"))
-  if (corFn=="bicor") { this.corFn="bicor" } else { cat("- Using Pearson correlation (corFn not set or not='bicor').\n"); this.corFn="cor"; }
+  if (!exists("corFn")) corFn="cor"
+  if (corFn=="bicor") { this.corFn="bicor" } else if (corFn=="kendall") { cat("- Using Kendall's Tau correlation from psych::corr.test(). And enforcing n>2 pairwise complete correlation.\n"); this.corFn="kendall"; } else if (corFn=="spearman") { cat("- Using Spearman's rank correlation from psych::corr.test(). And enforcing n>2 pairwise complete correlation.\n"); this.corFn="spearman"; } else { cat("- Using Pearson correlation (corFn not set or not='bicor' or 'kendall').\n"); this.corFn="cor"; }
 
   CORstatList<-list()
   for(cor.trait in cor.traits) {
     for(filter.trait.value in filter.trait.subsets) {
         subset.idx= if(!filter.trait.value=="ALL") { which(numericMeta[,filter.trait]==filter.trait.value) } else { c(1:nrow(numericMeta)) }
-        rawStats=if(this.corFn=="bicor") { apply(cleanDat,1,function(x) WGCNA::bicorAndPvalue(x[subset.idx],numericMeta[subset.idx,cor.trait],use="pairwise.complete.obs",alternative="two.sided")) } else {
+        rawStats= if(this.corFn=="bicor") { apply(cleanDat,1,function(x) WGCNA::bicorAndPvalue(x[subset.idx],numericMeta[subset.idx,cor.trait],use="pairwise.complete.obs",alternative="two.sided")) } else if(this.corFn=="kendall" | this.corFn=="spearman") {
+                                           apply(cleanDat,1,function(x) {
+                                           x.pre<-x[subset.idx]
+                                           y.pre<-numericMeta[subset.idx,cor.trait]
+                                           keepComps=intersect(which(!is.na(x.pre)),which(!is.na(y.pre)))
+                                           x.noNApairwise<-x.pre[keepComps]
+                                           y.noNApairwise<-y.pre[keepComps]
+                                           if(length(keepComps)>2) { psych::corr.test(x.noNApairwise, y.noNApairwise,use="pairwise.complete.obs",method=this.corFn) } else {
+                                             list(r=0,p=1,se=NA,t=NA,n=0) }
+                                           }) } else {
                                            apply(cleanDat,1,function(x) WGCNA::corAndPvalue(x[subset.idx],numericMeta[subset.idx,cor.trait],use="pairwise.complete.obs",alternative="two.sided")) }
-      CORstatList[[paste0(gsub("\\.","_",cor.trait),".",filter.trait.value)]]=as.data.frame(matrix( unlist(lapply(rawStats,function(x) c(x[this.corFn],x["p"],x["Z"],x["t"],x["nObs"]))), nrow=nrow(cleanDat),ncol=5,byrow=TRUE) )
+      CORstatList[[paste0(gsub("\\.","_",cor.trait),".",filter.trait.value)]]=if(this.corFn=="kendall" | this.corFn=="spearman") {
+        as.data.frame(matrix( unlist(lapply(rawStats,function(x) c(x["r"],x["p"],x["se"],x["t"],x["n"]))), nrow=nrow(cleanDat),ncol=5,byrow=TRUE) ) } else {
+        as.data.frame(matrix( unlist(lapply(rawStats,function(x) c(x[this.corFn],x["p"],x["Z"],x["t"],x["nObs"]))), nrow=nrow(cleanDat),ncol=5,byrow=TRUE) )
+      }
       this.list=paste0(gsub("\\.","_",cor.trait),".",filter.trait.value)  #cor.trait has '.' changed to '_' for plotVolc() run with corVolc=TRUE to parse column names consistently & correctly
-      if(!this.corFn=="bicor") this.corFn="cor"
-      colnames(CORstatList[[this.list]])<-c(this.corFn,"p","Z","t","nObs")
+      if (this.corFn=="kendall" | this.corFn=="spearman") {
+        colnames(CORstatList[[this.list]])<-c("cor","p","SE","t","nObs")
+      } else {
+        colnames(CORstatList[[this.list]])<-c(this.corFn,"p","Z","t","nObs")
+      }
       rownames(CORstatList[[this.list]])<-rownames(cleanDat)
       cat(paste0("Finished CORstatList[[",this.list,"]]\n"))
     }
   }
 
+  if(!this.corFn=="bicor") { this.corlabel="cor" } else { this.corlabel="bicor" }
+
   CORout<-matrix(NA,nrow=nrow(cleanDat),ncol=2)
   colnames(CORout)<-c("Unused.Col","Unused.Col2")
-  for(columnX in c("p",this.corFn)) {
+  for(columnX in c("p",this.corlabel)) {
     this.list<-lapply(CORstatList,function(statTable) statTable[,columnX])
     #this.mat<-matrix(NA,nrow=nrow(cleanDat),ncol=0)
     #for(this.corr in names(this.list)) this.mat<-cbind(this.mat,this.list[[this.corr]])
